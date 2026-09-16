@@ -1,3 +1,12 @@
+/build
+/*.user
+/.qtc_clangd
+/target
+/.qoder
+/i18n/translations/*.qm
+/.claude
+/opencv
+
 # C++ objects and libs
 *.slo
 *.lo
