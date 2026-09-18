@@ -1,6 +1,6 @@
 #include "workthread.h"
-#include "ImageUtils.h"
 #include "camera.h"
+#include "imageUtils.h"
 #include "opencv2/imgcodecs.hpp"
 #include "productfeatureengine.h"
 #include "qdebug.h"
@@ -11,6 +11,23 @@
 #include <QDateTime>
 #include <QDir>
 
+inline QDebug operator<<(QDebug dbg, const cv::Rect& rect)
+{
+    QDebugStateSaver saver(dbg);
+    dbg.nospace() << "cv::Rect(x:" << rect.x
+                  << ", y:" << rect.y
+                  << ", w:" << rect.width
+                  << ", h:" << rect.height << ")";
+    return dbg;
+}
+
+inline QDebug operator<<(QDebug dbg, const cv::Point& pt)
+{
+    QDebugStateSaver saver(dbg);
+    dbg.nospace() << "cv::Point(" << pt.x << ", " << pt.y << ")";
+    return dbg;
+}
+
 WorkThread::WorkThread(QObject* parent)
     : QObject(parent)
 {
@@ -20,15 +37,17 @@ WorkThread::WorkThread(QObject* parent)
         initDir();
 
         m_productDatabase.loadFromFile("./model/data.bat");
+
         m_bg = cv::imread(Camera::backgroundImgDir().toStdString() + "/background.jpg");
+
         if (m_bg.empty()) {
             emit error("背景加载失败");
         }
     });
 
-    m_featureWeights.color = 1.0f; // 调大可增加对颜色的敏感度
+    m_featureWeights.color = 0.6f; // 调大可增加对颜色的敏感度
     m_featureWeights.texture = 0.8f; // 调大可增加对表面花纹的敏感度
-    m_featureWeights.shape = 0.5f;
+    m_featureWeights.shape = 1.0f;
 }
 
 WorkThread::~WorkThread()
@@ -81,6 +100,14 @@ void WorkThread::onUpdateVertex(const QVector<QPointF>& points)
 {
     m_cropPoints.clear();
     m_cropPoints.append(points);
+
+    std::vector<cv::Point> pts;
+    pts.reserve(m_cropPoints.size());
+    for (const QPointF& pt : qAsConst(m_cropPoints)) {
+        pts.emplace_back(qRound(pt.x()), qRound(pt.y()));
+    }
+
+    m_cropRect = cv::boundingRect(pts);
 }
 
 void WorkThread::recognition(const cv::Mat& cur_fg)
@@ -91,18 +118,27 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
         return;
     }
 
+    cv::Mat cropBg = m_bg(m_cropRect);
+
     // 2. 自动抠图获得纯净 ROI
-    auto [roi1, mask] = ProductFeatureEngine::cropROI(m_bg, cur_fg);
+    auto [cropGoods, mask] = ProductFeatureEngine::cropROI(cropBg, cur_fg);
 
-    emit cropROIed(ImageUtils::matToQImage(roi1), ImageUtils::matToQImage(m_bg), ImageUtils::matToQImage(mask));
+    cv::Mat copy_bg = m_bg.clone();
+    cv::rectangle(copy_bg,
+        m_cropRect & cv::Rect(0, 0, m_bg.cols, m_bg.rows),
+        cv::Scalar(0, 0, 255),
+        2,
+        cv::LINE_8);
 
-    if (roi1.empty()) {
+    emit cropROIed(ImageUtils::matToQImage(cropGoods), ImageUtils::matToQImage(copy_bg), ImageUtils::matToQImage(mask));
+
+    if (cropGoods.empty()) {
         emit error("未能获取商品，请确定已放置");
         return;
     }
 
     // 3. 提取 391 维加权归一化向量
-    std::vector<float> vec1 = ProductFeatureEngine::extract(roi1, mask, m_featureWeights);
+    std::vector<float> vec1 = ProductFeatureEngine::extract(cropGoods, mask, m_featureWeights);
 
     std::vector<SearchResult> results = m_productDatabase.search(vec1);
 
@@ -140,13 +176,7 @@ void WorkThread::initDir()
 
 cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
 {
-    std::vector<cv::Point> pts;
-    pts.reserve(m_cropPoints.size());
-    for (const QPointF& pt : qAsConst(m_cropPoints)) {
-        pts.emplace_back(qRound(pt.x()), qRound(pt.y()));
-    }
-
-    cv::Rect roi = cv::boundingRect(pts);
+    cv::Rect roi = m_cropRect;
 
     if (!frame.isValid() || roi.width <= 0 || roi.height <= 0)
         return cv::Mat();
@@ -157,15 +187,10 @@ cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
 
         int height = frame.height();
         int width = frame.width();
-        int bytesPerLine = frame.bytesPerLine();
 
         cv::Mat fullFrame = ImageUtils::qImageToMat(frame.image().mirrored());
 
-        cv::Rect safeRoi = roi & cv::Rect(0, 0, width, height);
-
-        std::cout << "匹配结果: 不同商品" << safeRoi << std::endl;
-
-        croppedMat = fullFrame(safeRoi).clone();
+        croppedMat = fullFrame(roi & cv::Rect(0, 0, width, height)).clone();
 
         frame.unmap();
     }
@@ -175,13 +200,26 @@ cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
 
 void WorkThread::studied(const cv::Mat& cur_fg)
 {
-    auto [roi1, mask] = ProductFeatureEngine::cropROI(m_bg, cur_fg);
-    if (roi1.empty()) {
+    if (m_name.isEmpty()) {
+        emit error("商品名称不能为空");
+        return;
+    }
+
+    auto [cropGoods, mask] = ProductFeatureEngine::cropROI(m_bg(m_cropRect), cur_fg);
+    if (cropGoods.empty()) {
         emit error("学习失败，未能获取商品，请确定已放置");
         return;
     }
 
-    std::vector<float> feature = ProductFeatureEngine::extract(roi1, mask, m_featureWeights);
+    std::vector<float> feature = ProductFeatureEngine::extract(cropGoods, mask, m_featureWeights);
 
-    m_productDatabase.addProduct({ (quint64)QDateTime::currentSecsSinceEpoch(), m_name.toStdString(), m_barcode.toStdString(), feature });
+    bool code = m_productDatabase.addProduct({ (quint64)QDateTime::currentSecsSinceEpoch(), (m_name + m_barcode).toStdString(), m_barcode.toStdString(), feature });
+    if (code) {
+        emit error("学习成功");
+    } else {
+        emit error("学习失败");
+    }
+
+    m_name.clear();
+    m_barcode.clear();
 }

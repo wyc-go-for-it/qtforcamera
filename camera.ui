@@ -154,6 +154,12 @@
     </item>
     <item row="2" column="2">
      <widget class="QLabel" name="undiff_mat">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="frameShape">
        <enum>QFrame::Box</enum>
       </property>
@@ -360,6 +366,12 @@
     </item>
     <item row="0" column="2" rowspan="2">
      <widget class="QLabel" name="diff_mat">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>0</width>
@@ -386,6 +398,12 @@
     </item>
     <item row="0" column="3" rowspan="2">
      <widget class="QLabel" name="binary_diff_mat">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="minimumSize">
        <size>
         <width>0</width>
@@ -459,7 +477,7 @@
   <customwidget>
    <class>ROIViewfinder</class>
    <extends>QWidget</extends>
-   <header>roiviewfinder.h</header>
+   <header location="global">roiviewfinder.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>

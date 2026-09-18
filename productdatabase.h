@@ -32,7 +32,7 @@ private:
 
 public:
     // 1. 添加商品到库中
-    void addProduct(const ProductRecord& record);
+    bool addProduct(const ProductRecord& record);
 
     // 2. 持久化：保存到二进制文件
     bool saveToFile(const std::string& filepath);

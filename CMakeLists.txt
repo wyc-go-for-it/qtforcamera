@@ -9,8 +9,16 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(ANDROID)
+    set(QT_ANDROID_PACKAGE_SOURCE_DIR "\"android-package-source-directory\": \"${CMAKE_CURRENT_SOURCE_DIR}/android\"," CACHE STRING "" FORCE)
+endif()
+
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets)
+
+if(ANDROID)
+    find_package(Qt5 REQUIRED COMPONENTS AndroidExtras)
+endif()
 
 set(HEADER
     camera.h
@@ -22,6 +30,9 @@ set(HEADER
     imageutils.h
     roiviewfinder.h
 )
+if(ANDROID)
+    list(APPEND HEADER androidUtils/localandroidutils.h)
+endif()
 
 set(SOURCES
     main.cpp
@@ -34,6 +45,9 @@ set(SOURCES
     imageutils.cpp
     roiviewfinder.cpp
 )
+if(ANDROID)
+    list(APPEND HEADER androidUtils/localandroidutils.cpp)
+endif()
 
 set(UI
     camera.ui
@@ -47,18 +61,18 @@ set(PROJECT_SOURCES
     ${UI}
 )
 
-# 针对 Debug 配置
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/bin/Debug)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/lib/Debug)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/lib/Debug)
-
-# 针对 Release 配置
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/target/bin/Release)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/target/lib/Release)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/target/lib/Release)
-
 # 针对 MSVC 编译器添加 /utf-8 选项
 if(MSVC)
+    # 针对 Debug 配置
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/bin/Debug)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/lib/Debug)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/lib/Debug)
+
+    # 针对 Release 配置
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/target/bin/Release)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/target/lib/Release)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_SOURCE_DIR}/target/lib/Release)
+
     add_compile_options(/utf-8)
 endif()
 
@@ -67,17 +81,18 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET qtforcamera APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
+    set_target_properties(qtforcamera PROPERTIES
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
+    )
 else()
     if(ANDROID)
         add_library(qtforcamera SHARED
             ${PROJECT_SOURCES}
         )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
+        set_target_properties(qtforcamera PROPERTIES
+            QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
+            # ANDROID_EXTRA_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/libs/libcustom.so"
+        )
     else()
         add_executable(qtforcamera
             ${PROJECT_SOURCES}
@@ -85,38 +100,89 @@ else()
     endif()
 endif()
 
+target_include_directories(qtforcamera PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+#包含Android目录
+if(ANDROID)
+    file(GLOB_RECURSE ANDROID_EXTRA_FILES
+        CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/android/*"
+    )
+    if(ANDROID_EXTRA_FILES)
+        target_sources(qtforcamera PRIVATE ${ANDROID_EXTRA_FILES})
+
+        source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/android"
+                     PREFIX "android"
+                     FILES ${ANDROID_EXTRA_FILES})
+    endif()
+endif()
+
+#链接
 target_link_libraries(qtforcamera PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Multimedia
     Qt${QT_VERSION_MAJOR}::MultimediaWidgets
 )
 
+if(ANDROID)
+    target_link_libraries(qtforcamera PRIVATE Qt5::AndroidExtras)
+endif()
+
 #link opencv
+set(OPENCV_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv2")
+target_include_directories(qtforcamera PRIVATE "${OPENCV_DLL_DIR}/include")
+
 if(WIN32)
-    add_library(OpencvLibrary SHARED IMPORTED)
-    set(OPENCV_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv")
-    set_target_properties(OpencvLibrary PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${OPENCV_DLL_DIR}/include"
-    )
-    set_target_properties(OpencvLibrary PROPERTIES
-        # --- Debug 配置 ---
-        IMPORTED_IMPLIB_DEBUG     "${OPENCV_DLL_DIR}/lib/opencv_world452d.lib"
-        IMPORTED_LOCATION_DEBUG   "${OPENCV_DLL_DIR}/bin/opencv_world452d.dll"
+    set(OPENCV_WIN_DLL_DIR "${OPENCV_DLL_DIR}/win")
 
-        # --- Release 配置 ---
-        IMPORTED_IMPLIB_RELEASE   "${OPENCV_DLL_DIR}/lib/opencv_world452.lib"
-        IMPORTED_LOCATION_RELEASE "${OPENCV_DLL_DIR}/bin/opencv_world452.dll"
+    target_link_libraries(qtforcamera PRIVATE
+        # Debug 模式链接
+        debug "${OPENCV_WIN_DLL_DIR}/lib/opencv_core455d.lib"
+        debug "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgcodecs455d.lib"
+        debug "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgproc455d.lib"
+
+        # Release / RelWithDebInfo 等模式链接
+        optimized "${OPENCV_WIN_DLL_DIR}/lib/opencv_core455.lib"
+        optimized "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgcodecs455.lib"
+        optimized "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgproc455.lib"
     )
 
-    target_link_libraries(qtforcamera PRIVATE OpencvLibrary)
-    set(OPENCV_DLL_NAME "opencv_world452.dll")
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        set(OPENCV_DLL_NAME "opencv_world452d.dll")
-    endif()
+    # 3. 自动拷贝对应的 DLL 到输出目录
     add_custom_command(TARGET qtforcamera POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${OPENCV_DLL_DIR}/bin/${OPENCV_DLL_NAME}"
+            $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_core455d.dll>
+            $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgcodecs455d.dll>
+            $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgproc455d.dll>
+            $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_core455.dll>
+            $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgcodecs455.dll>
+            $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgproc455.dll>
             "$<TARGET_FILE_DIR:qtforcamera>"
+        COMMAND_EXPAND_LISTS
+    )
+elseif(ANDROID)
+    set(OPENCV_ANDROID_LIB_DIR "${OPENCV_DLL_DIR}/android")
+
+    add_library(opencv_static STATIC IMPORTED)
+
+    file(GLOB ANDROID_STATIC_LIBS
+            "${OPENCV_ANDROID_LIB_DIR}/lib/${ANDROID_ABI}/*.a"
+        )
+
+    file(GLOB OPENCV_3RDPARTY_LIBS
+            "${OPENCV_ANDROID_LIB_DIR}/3rdparty/lib/${ANDROID_ABI}/*.a"
+        )
+
+    target_link_libraries(qtforcamera PRIVATE
+        -Wl,--start-group
+        ${ANDROID_STATIC_LIBS}
+        ${OPENCV_3RDPARTY_LIBS}
+        -Wl,--end-group
+        log
+        z
+        android
     )
 endif()
 #end link opencv

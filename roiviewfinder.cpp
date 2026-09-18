@@ -1,5 +1,10 @@
 #include "roiviewfinder.h"
 
+ROIViewfinder::~ROIViewfinder()
+{
+    savePoints();
+}
+
 void ROIViewfinder::resizeEvent(QResizeEvent* event)
 {
     QCameraViewfinder::resizeEvent(event);
@@ -49,7 +54,7 @@ void ROIViewfinder::mouseMoveEvent(QMouseEvent* event)
         m_points[m_draggedIndex] = pos;
         update();
 
-        emit polygonChanged(m_points);
+        emit polygonChanged(calOriginalPoints());
     } else if (m_isDraggingPolygon) {
         QPointF delta = event->pos() - m_lastMousePos;
         bool canMove = true;
@@ -67,10 +72,68 @@ void ROIViewfinder::mouseMoveEvent(QMouseEvent* event)
             m_lastMousePos = event->pos();
             update();
 
-            emit polygonChanged(m_points);
+            emit polygonChanged(calOriginalPoints());
         }
     }
     QCameraViewfinder::mouseMoveEvent(event);
+}
+
+QVector<QPointF> ROIViewfinder::calOriginalPoints()
+{
+    QVector<QPointF> imgPts;
+    const QSize& imageSize = m_actualImageSize;
+    if (m_points.empty() || imageSize.isEmpty())
+        return imgPts;
+
+    QSize viewfinderSize = this->size();
+
+    QSize scaledSize = imageSize.scaled(viewfinderSize, Qt::KeepAspectRatio);
+    double targetX = (viewfinderSize.width() - scaledSize.width()) / 2.0;
+    double targetY = (viewfinderSize.height() - scaledSize.height()) / 2.0;
+
+    double scaleX = static_cast<double>(imageSize.width()) / scaledSize.width();
+    double scaleY = static_cast<double>(imageSize.height()) / scaledSize.height();
+
+    for (const auto& pt : qAsConst(m_points)) {
+
+        double imgX = (pt.x() - targetX) * scaleX;
+        double imgY = (pt.y() - targetY) * scaleY;
+
+        imgX = std::clamp(imgX, 0.0, static_cast<double>(imageSize.width() - 1));
+        imgY = std::clamp(imgY, 0.0, static_cast<double>(imageSize.height() - 1));
+
+        imgPts.push_back(QPointF(imgX, imgY));
+    }
+
+    return imgPts;
+}
+
+void ROIViewfinder::savePoints()
+{
+    QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
+
+    settings.beginWriteArray("roi_points");
+    for (int i = 0; i < m_points.size(); ++i) {
+        settings.setArrayIndex(i);
+        settings.setValue("point", m_points[i]);
+    }
+    settings.endArray();
+}
+
+QVector<QPointF> ROIViewfinder::loadPoints()
+{
+    QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
+    QVector<QPointF> points;
+
+    int size = settings.beginReadArray("roi_points");
+    for (int i = 0; i < size; ++i) {
+        settings.setArrayIndex(i);
+        QPointF pt = settings.value("point").toPointF();
+        points.append(pt);
+    }
+    settings.endArray();
+
+    return points;
 }
 
 void ROIViewfinder::mouseReleaseEvent(QMouseEvent* event)
@@ -95,8 +158,14 @@ void ROIViewfinder::paintEvent(QPaintEvent* event)
     painter.setRenderHint(QPainter::Antialiasing);
 
     QPolygonF poly(m_points);
-    painter.setPen(QPen(Qt::green, 2, Qt::SolidLine));
-    painter.setBrush(QColor(0, 255, 0, 25));
+
+    painter.setPen(QPen(Qt::red, 1, Qt::DotLine));
+    painter.setBrush(QColor(255, 0, 0, 25));
+
+    painter.drawRect(poly.boundingRect());
+
+    painter.setPen(QPen(Qt::green, 1, Qt::SolidLine));
+    painter.setBrush(Qt::NoBrush);
     painter.drawPolygon(poly);
 
     for (int i = 0; i < 4; ++i) {
@@ -108,14 +177,20 @@ void ROIViewfinder::paintEvent(QPaintEvent* event)
 
 void ROIViewfinder::initDefaultPoints()
 {
-    m_points.resize(4);
+
+    m_points = loadPoints();
+
     double w = width() > 0 ? width() : 640;
     double h = height() > 0 ? height() : 480;
 
-    m_points[0] = QPointF(w * 0.2, h * 0.2); // 左上
-    m_points[1] = QPointF(w * 0.8, h * 0.2); // 右上
-    m_points[2] = QPointF(w * 0.85, h * 0.8); // 右下 (稍宽，模拟近大远小)
-    m_points[3] = QPointF(w * 0.15, h * 0.8); // 左下
+    if (m_points.isEmpty()) {
+        m_points.resize(4);
+
+        m_points[0] = QPointF(w * 0.2, h * 0.2); // 左上
+        m_points[1] = QPointF(w * 0.8, h * 0.2); // 右上
+        m_points[2] = QPointF(w * 0.85, h * 0.8); // 右下 (稍宽，模拟近大远小)
+        m_points[3] = QPointF(w * 0.15, h * 0.8); // 左下
+    }
 }
 
 int ROIViewfinder::getHitPointIndex(const QPointF& mousePos)

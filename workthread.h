@@ -42,6 +42,7 @@ private:
     QString m_barcode;
     QString m_name;
     QVector<QPointF> m_cropPoints; // 0:左上, 1:右上, 2:右下, 3:左下
+    cv::Rect m_cropRect;
 };
 
 #endif // WORKTHREAD_H

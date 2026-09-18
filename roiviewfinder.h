@@ -2,6 +2,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRect>
+#include <QSettings>
 
 class ROIViewfinder : public QCameraViewfinder {
     Q_OBJECT
@@ -12,7 +13,13 @@ public:
         initDefaultPoints();
     }
 
-    QVector<QPointF> getPolygonPoints() const { return m_points; }
+    ~ROIViewfinder();
+
+    inline void updateImageSize(const QSize& size)
+    {
+        m_actualImageSize = size;
+        emit polygonChanged(calOriginalPoints());
+    }
 
 signals:
     void polygonChanged(const QVector<QPointF>& points);
@@ -33,6 +40,11 @@ private:
 
     int getHitPointIndex(const QPointF& mousePos);
 
+    QVector<QPointF> calOriginalPoints();
+
+    void savePoints();
+    QVector<QPointF> loadPoints();
+
 private:
     QVector<QPointF> m_points; // 0:左上, 1:右上, 2:右下, 3:左下
     int m_draggedIndex = -1;
@@ -40,4 +52,6 @@ private:
     bool m_isDraggingVertex = false; // 是否在拖拽单个顶点
     bool m_isDraggingPolygon = false; // 是否在拖拽整个图形
     QPointF m_lastMousePos; // 拖拽整体时的上一帧鼠标位置
+
+    QSize m_actualImageSize;
 };

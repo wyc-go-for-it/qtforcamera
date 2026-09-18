@@ -59,6 +59,7 @@
 #include <QMediaRecorder>
 #include <QMediaService>
 
+#include <QAbstractVideoSurface>
 #include <QMessageBox>
 #include <QPalette>
 #include <QVideoProbe>
@@ -95,7 +96,7 @@ Camera::Camera()
         int rawNum = QRandomGenerator::global()->bounded(0, 100000);
         auto barcode = QString("%1").arg(rawNum, 5, 10, QChar('0'));
 
-        mWorkThread->studying(barcode, ui->name->text() + barcode);
+        mWorkThread->studying(barcode, ui->name->text());
 
         ui->name->clear();
     });
@@ -122,12 +123,20 @@ void Camera::initDir()
 
 QString Camera::photoDir()
 {
+#ifdef Q_OS_ANDROID
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/img/photo";
+#else
     return QCoreApplication::applicationDirPath() + "/img/photo";
+#endif
 }
 
 QString Camera::backgroundImgDir()
 {
+#ifdef Q_OS_ANDROID
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/img/background";
+#else
     return QCoreApplication::applicationDirPath() + "/img/background";
+#endif
 }
 
 void Camera::initDevices()
@@ -154,7 +163,13 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
 
     auto* probe = new QVideoProbe(m_camera.data());
     if (probe->setSource(m_camera.data())) {
-        probe->connect(probe, &QVideoProbe::videoFrameProbed, mWorkThread, &WorkThread::onVideoFrameChanged);
+        probe->connect(probe, &QVideoProbe::videoFrameProbed, this, [this](const QVideoFrame& frame) {
+            if (!isFirstFrame) {
+                isFirstFrame = true;
+                ui->viewfinder->updateImageSize(frame.size());
+            }
+            mWorkThread->onVideoFrameChanged(frame);
+        });
     }
 
     connect(m_camera.data(), &QCamera::stateChanged, this, &Camera::updateCameraState);
@@ -189,7 +204,11 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
     ui->captureWidget->setTabEnabled(1, (m_camera->isCaptureModeSupported(QCamera::CaptureVideo)));
 
     updateCaptureMode();
+
     m_camera->start();
+
+    qDebug() << "pixelFormat:" << m_camera->viewfinderSettings().pixelFormat();
+    qDebug() << "pixelFormat:" << ui->viewfinder->videoSurface()->supportedPixelFormats();
 }
 
 void Camera::keyPressEvent(QKeyEvent* event)
@@ -301,6 +320,8 @@ void Camera::configureImageSettings()
     if (settingsDialog.exec()) {
         m_imageSettings = settingsDialog.imageSettings();
         m_imageCapture->setEncodingSettings(m_imageSettings);
+
+        ui->viewfinder->updateImageSize(m_imageSettings.resolution());
     }
 }
 
@@ -492,7 +513,7 @@ void Camera::showRecognition(const QImage& diff, const QImage& undiff, const QIm
         Qt::SmoothTransformation);
     ui->diff_mat->setPixmap(QPixmap::fromImage(scaledDiff));
 
-    auto scaledUnDiff = undiff.scaled(ui->diff_mat->size(),
+    auto scaledUnDiff = undiff.scaled(ui->undiff_mat->size(),
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation);
     ui->undiff_mat->setPixmap(QPixmap::fromImage(scaledUnDiff));

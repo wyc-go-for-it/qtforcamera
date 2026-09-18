@@ -16,14 +16,15 @@ void ProductDatabase::rebuildMatrix()
     }
 }
 
-void ProductDatabase::addProduct(const ProductRecord& record)
+bool ProductDatabase::addProduct(const ProductRecord& record)
 {
     if (record.feature.size() != static_cast<size_t>(featureDim)) {
-        std::cerr << "特征维度不匹配！" << std::endl;
-        return;
+        return false;
     }
     records.push_back(record);
     rebuildMatrix();
+
+    return true;
 }
 
 bool ProductDatabase::saveToFile(const std::string& filepath)

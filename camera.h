@@ -144,6 +144,8 @@ private:
     bool m_applicationExiting = false;
 
     WorkThread* mWorkThread;
+
+    bool isFirstFrame = false;
 };
 
 #endif
