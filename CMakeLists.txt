@@ -29,6 +29,8 @@ set(HEADER
     workthread.h
     imageutils.h
     roiviewfinder.h
+    goodsmodel.h
+    goodsdelegate.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -44,6 +46,8 @@ set(SOURCES
     workthread.cpp
     imageutils.cpp
     roiviewfinder.cpp
+    goodsmodel.cpp
+    goodsdelegate.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -219,16 +223,16 @@ set_target_properties(qtforcamera PROPERTIES
 )
 
 #安装
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/target/install" CACHE PATH "Default install prefix" FORCE)
-endif()
-include(GNUInstallDirs)
-install(TARGETS qtforcamera
-    BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}   # macOS bundle (.app)
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}   # Windows / Linux 可执行文件 (.exe)
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 动态库 (.so / .dylib)
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 静态库 (.a / .lib)
-)
+#if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+#    set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/target/install" CACHE PATH "Default install prefix" FORCE)
+#endif()
+#include(GNUInstallDirs)
+#install(TARGETS qtforcamera
+#    BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}   # macOS bundle (.app)
+#    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}   # Windows / Linux 可执行文件 (.exe)
+#    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 动态库 (.so / .dylib)
+#    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 静态库 (.a / .lib)
+#)
 
 #向下兼容 Qt 5 避免编译时出现 Unknown CMake command "qt_finalize_executable" 的报错
 if(QT_VERSION_MAJOR EQUAL 6)

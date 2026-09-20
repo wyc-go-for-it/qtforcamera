@@ -49,6 +49,8 @@
 ****************************************************************************/
 
 #include "camera.h"
+#include "goodsdelegate.h"
+#include "goodsmodel.h"
 #include "imagesettings.h"
 #include "ui_camera.h"
 #include "videosettings.h"
@@ -96,7 +98,7 @@ Camera::Camera()
         int rawNum = QRandomGenerator::global()->bounded(0, 100000);
         auto barcode = QString("%1").arg(rawNum, 5, 10, QChar('0'));
 
-        mWorkThread->studying(barcode, ui->name->text());
+        mWorkThread->studying({ 0, ui->name->text().toStdString(), barcode.toStdString() });
 
         ui->name->clear();
     });
@@ -104,6 +106,9 @@ Camera::Camera()
     connect(ui->viewfinder, &ROIViewfinder::polygonChanged, mWorkThread, &WorkThread::onUpdateVertex);
 
     mWorkThread->init();
+
+    initGoodsInfo();
+    initRecogInfo();
 }
 
 Camera::~Camera()
@@ -521,7 +526,42 @@ void Camera::showRecognition(const QImage& diff, const QImage& undiff, const QIm
     auto scaledBinaryDiff = binary_diff.scaled(ui->binary_diff_mat->size(),
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation);
+
     ui->binary_diff_mat->setPixmap(QPixmap::fromImage(scaledBinaryDiff));
+}
+
+void Camera::initGoodsInfo()
+{
+    ui->goods_list->setItemDelegate(new GoodsDelegate(this));
+    ui->goods_list->setModel(new GoodsModel(this));
+    connect(ui->goods_list, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex& index) {
+        quint64 id = index.data(Qt::UserRole + 1).toULongLong();
+        auto bracode = index.data(Qt::UserRole + 2).toString().toStdString();
+        auto name = index.data().toString().toStdString();
+        mWorkThread->studying({ id, name, bracode });
+    });
+}
+
+void Camera::initRecogInfo()
+{
+    ui->recog_lst->setItemDelegate(new GoodsDelegate(this));
+    auto model = new RecogModel(this);
+    ui->recog_lst->setModel(model);
+
+    connect(mWorkThread, &WorkThread::recogFinised, this, [model](const QList<SearchResult>& data) {
+        model->clear();
+        if (data.isEmpty()) {
+            model->addRows({});
+        } else {
+            QList<SearchResult> copy;
+
+            std::copy_if(data.cbegin(), data.cend(), std::back_inserter(copy), [](const SearchResult& r) {
+                return r.similarity > 0.8;
+            });
+
+            model->addRows(copy);
+        }
+    });
 }
 
 void Camera::saveBackgroundImage()

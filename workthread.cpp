@@ -38,11 +38,7 @@ WorkThread::WorkThread(QObject* parent)
 
         m_productDatabase.loadFromFile("./model/data.bat");
 
-        m_bg = cv::imread(Camera::backgroundImgDir().toStdString() + "/background.jpg");
-
-        if (m_bg.empty()) {
-            emit error("背景加载失败");
-        }
+        loadBG();
     });
 
     m_featureWeights.color = 0.6f; // 调大可增加对颜色的敏感度
@@ -63,10 +59,9 @@ void WorkThread::init()
     m_thread.start();
 }
 
-void WorkThread::studying(const QString& barcode, const QString& name)
+void WorkThread::studying(const ProductRecord& record)
 {
-    m_barcode = barcode;
-    m_name = name;
+    m_studiedRecord = record;
     isStudied.storeRelaxed(true);
 }
 
@@ -112,6 +107,10 @@ void WorkThread::onUpdateVertex(const QVector<QPointF>& points)
 
 void WorkThread::recognition(const cv::Mat& cur_fg)
 {
+    if (m_bg.empty()) {
+        emit error("背景无效");
+        return;
+    }
 
     if (cur_fg.empty()) {
         emit error("识别图片转换错误");
@@ -133,6 +132,8 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
     emit cropROIed(ImageUtils::matToQImage(cropGoods), ImageUtils::matToQImage(copy_bg), ImageUtils::matToQImage(mask));
 
     if (cropGoods.empty()) {
+        emit recogFinised({});
+
         emit error("未能获取商品，请确定已放置");
         return;
     }
@@ -145,22 +146,10 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
     if (results.empty()) {
         emit error("未识别到商品");
     } else {
-
         emit error(QString("识别商品《%1》，相似度得分:%2").arg(QString::fromStdString(results.at(0).name)).arg(results.at(0).similarity));
-
-        for (const auto& r : results) {
-
-            qDebug() << "向量维度: " << vec1.size();
-            qDebug() << "当前商品与商品<" << QString(r.name.c_str()) << ">"
-                     << "的相似度得分: " << r.similarity;
-
-            if (r.similarity > 0.85f) {
-                qDebug() << "匹配结果: 同一款商品";
-            } else {
-                std::cout << "匹配结果: 不同商品";
-            }
-        }
     }
+
+    emit recogFinised(QList<SearchResult>(results.begin(), results.end()));
 }
 
 QString WorkThread::modelDir()
@@ -198,9 +187,17 @@ cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
     return croppedMat;
 }
 
+void WorkThread::loadBG()
+{
+    m_bg = cv::imread(Camera::backgroundImgDir().toStdString() + "/background.jpg");
+    if (m_bg.empty()) {
+        emit error("背景加载失败");
+    }
+}
+
 void WorkThread::studied(const cv::Mat& cur_fg)
 {
-    if (m_name.isEmpty()) {
+    if (m_studiedRecord.name.empty()) {
         emit error("商品名称不能为空");
         return;
     }
@@ -211,15 +208,22 @@ void WorkThread::studied(const cv::Mat& cur_fg)
         return;
     }
 
-    std::vector<float> feature = ProductFeatureEngine::extract(cropGoods, mask, m_featureWeights);
+    m_studiedRecord.feature = ProductFeatureEngine::extract(cropGoods, mask, m_featureWeights);
 
-    bool code = m_productDatabase.addProduct({ (quint64)QDateTime::currentSecsSinceEpoch(), (m_name + m_barcode).toStdString(), m_barcode.toStdString(), feature });
+    auto existFeature = m_productDatabase.searchVec(m_studiedRecord.id);
+
+    ProductFeatureEngine::reinforceFeatureVector(m_studiedRecord.feature, existFeature);
+
+    if (m_studiedRecord.id == 0) {
+        m_studiedRecord.id = (quint64)QDateTime::currentSecsSinceEpoch();
+    }
+
+    bool code = m_productDatabase.addProduct(m_studiedRecord);
     if (code) {
         emit error("学习成功");
     } else {
         emit error("学习失败");
     }
 
-    m_name.clear();
-    m_barcode.clear();
+    m_studiedRecord = { 0 };
 }

@@ -124,6 +124,9 @@ private slots:
 
     void showRecognition(const QImage& diff, const QImage& undiff, const QImage& binary_diff);
 
+    void initGoodsInfo();
+    void initRecogInfo();
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;

@@ -15,7 +15,7 @@ public:
     ~WorkThread();
 
     void init();
-    void studying(const QString& barcode, const QString& name);
+    void studying(const ProductRecord& record);
 
 public slots:
     void onVideoFrameChanged(const QVideoFrame& frame);
@@ -25,6 +25,7 @@ public slots:
 signals:
     void cropROIed(const QImage& diff, const QImage& undiff, const QImage& binary_diff);
     void error(const QString& error);
+    void recogFinised(const QList<SearchResult>& data);
 
 private:
     void studied(const cv::Mat& cur_fg);
@@ -32,6 +33,7 @@ private:
     QString modelDir();
     void initDir();
     cv::Mat cropVideoFrame(QVideoFrame& frame);
+    void loadBG();
 
 private:
     QThread m_thread;
@@ -39,8 +41,9 @@ private:
     ProductDatabase m_productDatabase;
     cv::Mat m_bg;
     FeatureWeights m_featureWeights;
-    QString m_barcode;
-    QString m_name;
+
+    ProductRecord m_studiedRecord;
+
     QVector<QPointF> m_cropPoints; // 0:左上, 1:右上, 2:右下, 3:左下
     cv::Rect m_cropRect;
 };

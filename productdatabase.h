@@ -7,10 +7,15 @@
 
 // 商品元数据与特征结构体
 struct ProductRecord {
-    uint64_t id;
+    uint64_t id = 0;
     std::string name;
     std::string barcode;
-    std::vector<float> feature; // 391维
+    std::vector<float> feature; // 455维
+
+    bool operator==(const ProductRecord& other)
+    {
+        return id == other.id;
+    }
 };
 
 // 检索结果结构体
@@ -24,8 +29,7 @@ struct SearchResult {
 class ProductDatabase {
 private:
     std::vector<ProductRecord> records;
-    cv::Mat featureMatrix; // 将所有向量压入 N x 391 的矩阵中加速计算
-    const int featureDim = 391;
+    cv::Mat featureMatrix;
 
     // 重新构建内存矩阵
     void rebuildMatrix();
@@ -42,6 +46,7 @@ public:
 
     // 4. 高效检索 Top-K 最相似商品
     std::vector<SearchResult> search(const std::vector<float>& queryFeature, int topK = 3);
+    std::vector<float> searchVec(uint64 id);
 };
 
 #endif // PRODUCT_DATABASE_HPP

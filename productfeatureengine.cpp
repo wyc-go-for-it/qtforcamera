@@ -1,32 +1,27 @@
 #include "productfeatureengine.h"
 #include <cmath>
-#include <qDebug>
 
-std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, const cv::Mat& fg, double minArea)
+std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, const cv::Mat& fg, double minArea, bool rotation)
 {
     if (bg.empty() || fg.empty() || bg.size() != fg.size())
         return { cv::Mat(), cv::Mat() };
 
     // 1. 通道统一 (BGR)
-    cv::Mat bg3ch, fg3ch;
+    cv::Mat bg3ch = bg, fg3ch = fg;
     if (bg.channels() == 4)
         cv::cvtColor(bg, bg3ch, cv::COLOR_BGRA2BGR);
     else if (bg.channels() == 1)
         cv::cvtColor(bg, bg3ch, cv::COLOR_GRAY2BGR);
-    else
-        bg3ch = bg;
 
     if (fg.channels() == 4)
         cv::cvtColor(fg, fg3ch, cv::COLOR_BGRA2BGR);
     else if (fg.channels() == 1)
         cv::cvtColor(fg, fg3ch, cv::COLOR_GRAY2BGR);
-    else
-        fg3ch = fg;
 
-    // 2. 高斯模糊降噪 (15x15)
+    // 2. 适当降低模糊核（改为 5x5 / 7x7），保护细长笔套边缘
     cv::Mat bgBlur, fgBlur;
-    cv::GaussianBlur(bg3ch, bgBlur, cv::Size(15, 15), 0);
-    cv::GaussianBlur(fg3ch, fgBlur, cv::Size(15, 15), 0);
+    cv::GaussianBlur(bg3ch, bgBlur, cv::Size(5, 5), 0);
+    cv::GaussianBlur(fg3ch, fgBlur, cv::Size(5, 5), 0);
 
     // 3. 多通道最大差分
     cv::Mat diffColor, diff;
@@ -36,7 +31,7 @@ std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, con
     cv::max(channels[0], channels[1], diff);
     cv::max(diff, channels[2], diff);
 
-    // 4. 二值化 (阈值 40~45)
+    // 4. 二值化
     cv::Mat thresh;
     cv::threshold(diff, thresh, 42, 255, cv::THRESH_BINARY);
 
@@ -49,15 +44,15 @@ std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, con
         thresh(cv::Rect(thresh.cols - border, 0, border, thresh.rows)).setTo(0);
     }
 
-    // 6. 减小形态学核，防止商品与底部的线缆粘连
-    cv::Mat kOpen = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-    cv::Mat kClose = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)); // 降至 5x5
+    // 6. 形态学滤波
+    cv::Mat kOpen = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
+    cv::Mat kClose = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
     cv::morphologyEx(thresh, thresh, cv::MORPH_OPEN, kOpen);
     cv::morphologyEx(thresh, thresh, cv::MORPH_CLOSE, kClose);
 
-    // 7. 寻找最大轮廓
+    // 7. 寻找最大轮廓【注意：必须用 CHAIN_APPROX_NONE 保证旋转一致性】
     std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(thresh, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    cv::findContours(thresh, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
 
     int maxIdx = -1;
     double maxArea = 0.0;
@@ -74,28 +69,47 @@ std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, con
     if (maxIdx == -1)
         return { cv::Mat(), cv::Mat() };
 
-    // 1. 提取目标轮廓与外接矩形
     const auto& bestContour = contours[maxIdx];
-    cv::Rect bestRect = cv::boundingRect(bestContour);
-    bestRect &= cv::Rect(0, 0, fg3ch.cols, fg3ch.rows);
 
-    // 2. 创建精细掩码（Mask）：只将商品轮廓区域设为白色，且填充内部所有空洞
+    // 8. 创建精确掩码 (不使用 convexHull 避免拉直笔套的凹槽特征)
     cv::Mat productMask = cv::Mat::zeros(fg3ch.size(), CV_8UC1);
-
-    // 使用凸包（Convex Hull）把不规则果皮的内部空洞和凹陷补齐
-    std::vector<cv::Point> hull;
-    cv::convexHull(bestContour, hull);
-    std::vector<std::vector<cv::Point>> hulls = { hull };
+    std::vector<std::vector<cv::Point>> hulls = { bestContour };
     cv::drawContours(productMask, hulls, 0, cv::Scalar(255), cv::FILLED);
 
-    // 3. 【核心优化】背景遮罩抠图：只保留商品本身，背景木纹与黑线直接置黑 (0,0,0)
+    // 抠出前景
     cv::Mat foregroundOnly;
     fg3ch.copyTo(foregroundOnly, productMask);
 
-    // 4. 裁切最终 ROI（此时框外的黑线/木纹被 Mask 遮罩过滤掉了，极利于后续 HSV/LBP 提取）
-    cv::Mat croppedProduct = foregroundOnly(bestRect).clone();
+    if (rotation) {
+        // 9. 【核心改进】：计算最小外接矩形 (RotatedRect)，旋转摆正图像
+        cv::RotatedRect minRect = cv::minAreaRect(bestContour);
+        float angle = minRect.angle;
+        cv::Size2f rectSize = minRect.size;
 
-    return { croppedProduct, productMask(bestRect).clone() };
+        // 确保长边始终在水平方向 (Swapping Width & Height if needed)
+        if (rectSize.width < rectSize.height) {
+            std::swap(rectSize.width, rectSize.height);
+            angle += 90.0f;
+        }
+
+        // 构建仿射变换矩阵，绕中心旋转摆正
+        cv::Mat M = cv::getRotationMatrix2D(minRect.center, angle, 1.0);
+
+        // 调整旋转中心，使其居中平移到新的图像坐标系中
+        M.at<double>(0, 2) += rectSize.width / 2.0 - minRect.center.x;
+        M.at<double>(1, 2) += rectSize.height / 2.0 - minRect.center.y;
+
+        cv::Mat croppedProduct, croppedMask;
+        // 双线性插值旋转前景
+        cv::warpAffine(foregroundOnly, croppedProduct, M, rectSize, cv::INTER_CUBIC, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
+        // 最近邻插值旋转 Mask
+        cv::warpAffine(productMask, croppedMask, M, rectSize, cv::INTER_NEAREST, cv::BORDER_CONSTANT, cv::Scalar(0));
+
+        // 返回经过【摆正化】处理的标准水平方向 ROI 和 Mask
+        return { croppedProduct, croppedMask };
+    } else {
+        return { foregroundOnly, productMask };
+    }
 }
 
 std::vector<float> ProductFeatureEngine::extractColorFeature(const cv::Mat& roi, const cv::Mat& croppedMask)
@@ -141,7 +155,22 @@ std::vector<float> ProductFeatureEngine::extractColorFeature(const cv::Mat& roi,
     return vec;
 }
 
-std::vector<float> ProductFeatureEngine::extractShapeFeature(const cv::Mat& roi)
+std::vector<float> ProductFeatureEngine::extractShapeFeature(const cv::Mat& roi, const cv::Mat& mask)
+{
+    // std::vector<float> huVec = extractHuShapeFeature(roi); // 确保内部做过 -log10(|hu|)
+    std::vector<float> fourierVec = extractFourierShapeFeature(roi, mask);
+    std::vector<float> shapeVec;
+    shapeVec.reserve(fourierVec.size());
+    shapeVec.insert(shapeVec.end(), fourierVec.begin(), fourierVec.end());
+    // shapeVec.insert(shapeVec.end(), huVec.begin(), huVec.end());
+
+    // 全局 L2 归一化
+    normalizeVector(shapeVec);
+
+    return shapeVec;
+}
+
+std::vector<float> ProductFeatureEngine::extractHuShapeFeature(const cv::Mat& roi)
 {
     std::vector<float> vec;
     vec.reserve(7);
@@ -158,7 +187,103 @@ std::vector<float> ProductFeatureEngine::extractShapeFeature(const cv::Mat& roi)
         double val = (std::abs(hu[i]) > 1e-10) ? (sign * std::log10(std::abs(hu[i]))) : 0.0;
         vec.push_back(static_cast<float>(val));
     }
+
     return vec;
+}
+
+std::vector<float> ProductFeatureEngine::extractFourierShapeFeature(const cv::Mat& roi, const cv::Mat& mask, int numCoeffs)
+{
+    std::vector<float> feature(numCoeffs, 0.0f);
+
+    if (roi.empty()) {
+        return feature;
+    }
+
+    // 1. 转为二值单通道图像
+    cv::Mat gray;
+    if (!mask.empty() && mask.size() == roi.size()) {
+        gray = mask.clone();
+    } else {
+        if (roi.channels() == 3) {
+            cv::cvtColor(roi, gray, cv::COLOR_BGR2GRAY);
+        } else {
+            gray = roi.clone();
+        }
+        // 简单自适应或 Otsu 二值化，确保获取清晰边缘
+        cv::threshold(gray, gray, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    }
+
+    // 2. 查找轮廓并获取最大外轮廓
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(gray, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+
+    if (contours.empty()) {
+        return feature;
+    }
+
+    // 筛选面积最大的轮廓，消除孤立噪声点
+    auto mainContour = *std::max_element(contours.begin(), contours.end(),
+        [](const std::vector<cv::Point>& a, const std::vector<cv::Point>& b) {
+            return cv::contourArea(a) < cv::contourArea(b);
+        });
+
+    int N = static_cast<int>(mainContour.size());
+    if (N < 4) { // 轮廓点过少，无法进行有效的 DFT 变换
+        return feature;
+    }
+
+    // 3. 构建复数坐标点集 (x + i*y)
+    // 【平移不变性】：减去质心坐标 (Centroid Centering)
+    cv::Moments m = cv::moments(mainContour);
+    double cx = (m.m00 != 0) ? (m.m10 / m.m00) : 0.0;
+    double cy = (m.m00 != 0) ? (m.m01 / m.m00) : 0.0;
+
+    cv::Mat complexContour(N, 1, CV_32FC2);
+    for (int i = 0; i < N; ++i) {
+        float x = static_cast<float>(mainContour[i].x - cx);
+        float y = static_cast<float>(mainContour[i].y - cy);
+        complexContour.at<cv::Vec2f>(i, 0) = cv::Vec2f(x, y);
+    }
+
+    // 4. 执行一维离散傅里叶变换 (DFT)
+    cv::Mat dftResult;
+    cv::dft(complexContour, dftResult, cv::DFT_COMPLEX_OUTPUT);
+
+    // 5. 提取复数幅值（Magnitude），获得不变性处理
+    // 【缩放不变性】：使用 F(1) 或 F(0) 作为基准归一化
+    // 【旋转不变性】：取复数的模长 |F(k)|（消除了旋转带来的相角变化）
+    cv::Vec2f f1 = dftResult.at<cv::Vec2f>(1 % N, 0);
+    float scaleFactor = std::sqrt(f1[0] * f1[0] + f1[1] * f1[1]); // 第一低频分量模长
+
+    if (scaleFactor < 1e-6f) {
+        // 如果 F(1) 太小，使用所有分量模长均值做退化缩放
+        scaleFactor = 1.0f;
+    }
+
+    // 取前 numCoeffs 个低频分量（跳过 DC 分量 dftResult[0]，因为质心中心化后 DC 接近 0）
+    for (int i = 0; i < numCoeffs; ++i) {
+        int idx = (i + 1) % N;
+        cv::Vec2f coeff = dftResult.at<cv::Vec2f>(idx, 0);
+        float mag = std::sqrt(coeff[0] * coeff[0] + coeff[1] * coeff[1]);
+
+        // 消除缩放影响并填入特征向量
+        feature[i] = mag / scaleFactor;
+    }
+
+    // 6. 子特征内部 L2 归一化（确保所有数值 >= 0 且模长为 1）
+    float sumSq = 0.0f;
+    for (float v : feature) {
+        sumSq += v * v;
+    }
+    float norm = std::sqrt(sumSq);
+
+    if (norm > 1e-6f) {
+        for (float& v : feature) {
+            v /= norm;
+        }
+    }
+
+    return feature; // 返回非负且模长为 1 的特征向量
 }
 
 std::vector<float> ProductFeatureEngine::extractTextureFeature(const cv::Mat& roi, const cv::Mat& croppedMask)
@@ -207,11 +332,11 @@ std::vector<float> ProductFeatureEngine::extract(const cv::Mat& roi, const cv::M
         return {};
 
     auto colorVec = extractColorFeature(roi, croppedMask); // 128
-    auto shapeVec = extractShapeFeature(roi); // 7
+    auto shapeVec = extractShapeFeature(roi, croppedMask); // 71
     auto textureVec = extractTextureFeature(roi, croppedMask); // 256
 
     std::vector<float> feature;
-    feature.reserve(colorVec.size() + shapeVec.size() + textureVec.size());
+    feature.reserve(colorVec.size() + shapeVec.size() + shapeVec.size() + textureVec.size());
 
     // 加权融合
     for (float v : colorVec)
@@ -222,17 +347,22 @@ std::vector<float> ProductFeatureEngine::extract(const cv::Mat& roi, const cv::M
         feature.push_back(v * weights.texture);
 
     // 全局 L2 归一化
-    float sumSq = 0.0f;
-    for (float v : feature)
-        sumSq += v * v;
-    float norm = std::sqrt(sumSq);
-
-    if (norm > 1e-6f) {
-        for (float& v : feature)
-            v /= norm;
-    }
+    normalizeVector(feature);
 
     return feature;
+}
+
+void ProductFeatureEngine::reinforceFeatureVector(std::vector<float>& dbVec, const std::vector<float>& queryVec, float alpha, float beta)
+{
+    if (dbVec.size() != queryVec.size())
+        return;
+
+    for (size_t i = 0; i < dbVec.size(); ++i) {
+        // 融合特征
+        dbVec[i] = alpha * dbVec[i] + beta * queryVec[i];
+    }
+
+    normalizeVector(dbVec);
 }
 
 float ProductFeatureEngine::computeSimilarity(const std::vector<float>& vecA, const std::vector<float>& vecB)
@@ -244,4 +374,16 @@ float ProductFeatureEngine::computeSimilarity(const std::vector<float>& vecA, co
         dot += vecA[i] * vecB[i];
     }
     return dot;
+}
+
+void ProductFeatureEngine::normalizeVector(std::vector<float>& vec)
+{
+    float sumSq = 0.0f;
+    for (float v : vec)
+        sumSq += v * v;
+    float norm = std::sqrt(sumSq);
+    if (norm > 1e-6f) {
+        for (float& v : vec)
+            v /= norm;
+    }
 }

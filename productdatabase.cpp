@@ -1,4 +1,5 @@
 #include "productdatabase.h"
+#include "productfeatureengine.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -9,7 +10,7 @@ void ProductDatabase::rebuildMatrix()
         featureMatrix = cv::Mat();
         return;
     }
-    featureMatrix = cv::Mat(static_cast<int>(records.size()), featureDim, CV_32F);
+    featureMatrix = cv::Mat(static_cast<int>(records.size()), ProductFeatureEngine::featureDim, CV_32F);
     for (size_t i = 0; i < records.size(); ++i) {
         float* rowPtr = featureMatrix.ptr<float>(static_cast<int>(i));
         std::copy(records[i].feature.begin(), records[i].feature.end(), rowPtr);
@@ -18,10 +19,12 @@ void ProductDatabase::rebuildMatrix()
 
 bool ProductDatabase::addProduct(const ProductRecord& record)
 {
-    if (record.feature.size() != static_cast<size_t>(featureDim)) {
+    if (record.feature.size() != static_cast<size_t>(ProductFeatureEngine::featureDim)) {
         return false;
     }
+
     records.push_back(record);
+
     rebuildMatrix();
 
     return true;
@@ -49,8 +52,8 @@ bool ProductDatabase::saveToFile(const std::string& filepath)
         ofs.write(reinterpret_cast<const char*>(&codeLen), sizeof(codeLen));
         ofs.write(item.barcode.data(), codeLen);
 
-        // 写入 391 维 float 特征数组
-        ofs.write(reinterpret_cast<const char*>(item.feature.data()), featureDim * sizeof(float));
+        // 写入 featureDim 维 float 特征数组
+        ofs.write(reinterpret_cast<const char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
     }
     return true;
 }
@@ -79,8 +82,8 @@ bool ProductDatabase::loadFromFile(const std::string& filepath)
         item.barcode.resize(codeLen);
         ifs.read(&item.barcode[0], codeLen);
 
-        item.feature.resize(featureDim);
-        ifs.read(reinterpret_cast<char*>(item.feature.data()), featureDim * sizeof(float));
+        item.feature.resize(ProductFeatureEngine::featureDim);
+        ifs.read(reinterpret_cast<char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
 
         records.push_back(item);
     }
@@ -91,14 +94,14 @@ bool ProductDatabase::loadFromFile(const std::string& filepath)
 
 std::vector<SearchResult> ProductDatabase::search(const std::vector<float>& queryFeature, int topK)
 {
-    if (featureMatrix.empty() || queryFeature.size() != static_cast<size_t>(featureDim)) {
+    if (featureMatrix.empty() || queryFeature.size() != static_cast<size_t>(ProductFeatureEngine::featureDim)) {
         return {};
     }
 
-    // 将 query 转为 391 x 1 列向量
-    cv::Mat queryMat(featureDim, 1, CV_32F, const_cast<float*>(queryFeature.data()));
+    // 将 query 转为 featureDim x 1 列向量
+    cv::Mat queryMat(ProductFeatureEngine::featureDim, 1, CV_32F, const_cast<float*>(queryFeature.data()));
 
-    // 矩阵乘法： (N x 391) * (391 x 1) = (N x 1) 得分矩阵
+    // 矩阵乘法： (N x featureDim) * (featureDim x 1) = (N x 1) 得分矩阵
     cv::Mat scores = featureMatrix * queryMat;
 
     // 提取得分并按相似度降序排序
@@ -123,4 +126,14 @@ std::vector<SearchResult> ProductDatabase::search(const std::vector<float>& quer
             scoreIndexMap[i].first });
     }
     return results;
+}
+
+std::vector<float> ProductDatabase::searchVec(uint64 id)
+{
+    for (const auto& r : records) {
+        if (r.id == id) {
+            return r.feature;
+        }
+    }
+    return {};
 }
