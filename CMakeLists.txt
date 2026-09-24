@@ -31,6 +31,7 @@ set(HEADER
     roiviewfinder.h
     goodsmodel.h
     goodsdelegate.h
+    producttextcleaner.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -48,6 +49,7 @@ set(SOURCES
     roiviewfinder.cpp
     goodsmodel.cpp
     goodsdelegate.cpp
+    producttextcleaner.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -65,8 +67,14 @@ set(PROJECT_SOURCES
     ${UI}
 )
 
+#增加资源
+qt_add_resources(RESOURCES res.qrc)
+
+
 # 针对 MSVC 编译器添加 /utf-8 选项
 if(MSVC)
+    add_compile_options(/wd4251)
+
     # 针对 Debug 配置
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/bin/Debug)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/lib/Debug)
@@ -80,10 +88,31 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
+#ocr
+
+#NCNN 依赖
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/include)
+if(WIN32)
+    add_definitions(-DNOMINMAX)
+    set(NCNN_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/win/lib/ncnn.lib" )
+elseif(ANDROID)
+    set(NCNN_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/android/${ANDROID_ABI}/lib/libncnn.a")
+endif()
+
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/ocr_src/include
+)
+
+file(GLOB OCR_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/ocr_src/*.cpp)
+
+#end ocr
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(qtforcamera
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        ${OCR_CORE_SRCS}
+        ${RESOURCES}
     )
     set_target_properties(qtforcamera PROPERTIES
         QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
@@ -92,6 +121,8 @@ else()
     if(ANDROID)
         add_library(qtforcamera SHARED
             ${PROJECT_SOURCES}
+            ${OCR_CORE_SRCS}
+            ${RESOURCES}
         )
         set_target_properties(qtforcamera PROPERTIES
             QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
@@ -100,6 +131,8 @@ else()
     else()
         add_executable(qtforcamera
             ${PROJECT_SOURCES}
+            ${OCR_CORE_SRCS}
+            ${RESOURCES}
         )
     endif()
 endif()
@@ -134,6 +167,20 @@ target_link_libraries(qtforcamera PRIVATE
 if(ANDROID)
     target_link_libraries(qtforcamera PRIVATE Qt5::AndroidExtras)
 endif()
+
+#link ocr
+target_link_libraries(qtforcamera PRIVATE ${NCNN_LIBS})
+if(WIN32)
+    set(OCR_WIN_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/win")
+    add_custom_command(TARGET qtforcamera POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<$<CONFIG:Debug>:${OCR_WIN_DLL_DIR}/bin/ncnn.dll>
+            $<$<NOT:$<CONFIG:Debug>>:${OCR_WIN_DLL_DIR}/bin/ncnn.dll>
+            "$<TARGET_FILE_DIR:qtforcamera>"
+        COMMAND_EXPAND_LISTS
+    )
+endif()
+#end link ocr
 
 #link opencv
 set(OPENCV_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv2")

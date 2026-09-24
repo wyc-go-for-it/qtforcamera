@@ -6,6 +6,7 @@
 /i18n/translations/*.qm
 /.claude
 /opencv
+/ocr_model
 
 # C++ objects and libs
 *.slo

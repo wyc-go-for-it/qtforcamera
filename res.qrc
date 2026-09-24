@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/models">
+        <file>models/ch_ppocr_mobile_v2.0_cls_infer_fp16.bin</file>
+        <file>models/ch_ppocr_mobile_v2.0_cls_infer_fp16.param</file>
+        <file>models/ch_PP-OCRv3_det_infer_fp16.bin</file>
+        <file>models/ch_PP-OCRv3_det_infer_fp16.param</file>
+        <file>models/ch_PP-OCRv3_rec_infer_fp16.bin</file>
+        <file>models/ch_PP-OCRv3_rec_infer_fp16.param</file>
+        <file>models/ocr_keys_v1.txt</file>
+    </qresource>
+</RCC>

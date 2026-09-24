@@ -54,12 +54,24 @@ void GoodsDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option,
             painter->drawPath(m_path);
         }
 
-        painter->setPen(Qt::red);
+        bool show = index.data(Qt::UserRole + 12).toBool();
+        if (show) {
+            painter->setPen(Qt::gray);
+        } else {
+            painter->setPen(Qt::red);
+        }
+
         painter->drawText(base_rect, Qt::AlignCenter, index.data().toString());
 
         auto similarity = index.data(Qt::UserRole + 9);
         if (similarity.isValid()) {
-            painter->drawText(option.rect.marginsRemoved({ 0, 28, 0, 0 }), Qt::AlignCenter, QString::number(similarity.toDouble(), 'f', 5));
+            auto val = similarity.toDouble();
+            painter->drawText(option.rect.marginsRemoved({ 0, 28, 0, 0 }), Qt::AlignCenter, QString::number(val, 'f', 5));
+        }
+
+        auto rowId = index.data(Qt::UserRole + 8);
+        if (rowId.isValid()) {
+            painter->drawText(option.rect.marginsAdded({ 0, 28, 0, 0 }), Qt::AlignCenter, QString::number(rowId.toUInt()));
         }
 
         painter->restore();

@@ -91,14 +91,14 @@ Camera::Camera()
     });
     connect(mWorkThread, &WorkThread::cropROIed, this, &Camera::showRecognition);
     connect(mWorkThread, &WorkThread::error, this, [this](const QString& error) {
-        ui->statusbar->showMessage("WorkThread error:" + error);
+        ui->statusbar->showMessage("WorkThread info:" + error);
     });
 
     connect(ui->studyBtn, &QPushButton::clicked, this, [this]() {
         int rawNum = QRandomGenerator::global()->bounded(0, 100000);
         auto barcode = QString("%1").arg(rawNum, 5, 10, QChar('0'));
 
-        mWorkThread->studying({ 0, ui->name->text().toStdString(), barcode.toStdString() });
+        mWorkThread->studying({ 0, 0, ui->name->text().toStdString(), barcode.toStdString() });
 
         ui->name->clear();
     });
@@ -173,8 +173,8 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
                 isFirstFrame = true;
                 ui->viewfinder->updateImageSize(frame.size());
             }
-            mWorkThread->onVideoFrameChanged(frame);
         });
+        probe->connect(probe, &QVideoProbe::videoFrameProbed, mWorkThread, &WorkThread::onVideoFrameChanged);
     }
 
     connect(m_camera.data(), &QCamera::stateChanged, this, &Camera::updateCameraState);
@@ -199,8 +199,19 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
     connect(m_imageCapture.data(), &QCameraImageCapture::readyForCaptureChanged, this, &Camera::readyForCapture);
     connect(m_imageCapture.data(), &QCameraImageCapture::imageCaptured, this, &Camera::processCapturedImage);
     connect(m_imageCapture.data(), &QCameraImageCapture::imageSaved, this, &Camera::imageSaved);
-    connect(m_imageCapture.data(), QOverload<int, QCameraImageCapture::Error, const QString&>::of(&QCameraImageCapture::error),
-        this, &Camera::displayCaptureError);
+    connect(m_imageCapture.data(), QOverload<int, QCameraImageCapture::Error, const QString&>::of(&QCameraImageCapture::error), this, &Camera::displayCaptureError);
+    {
+        m_imageSettings = m_imageCapture->encodingSettings();
+
+        QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
+        settings.beginGroup("camera");
+
+        m_imageSettings.setResolution(settings.value("resolution", QSize(640, 480)).toSize());
+
+        settings.endGroup();
+
+        m_imageCapture->setEncodingSettings(m_imageSettings);
+    }
 
     connect(m_camera.data(), QOverload<QCamera::LockStatus, QCamera::LockChangeReason>::of(&QCamera::lockStatusChanged),
         this, &Camera::updateLockStatus);
@@ -326,7 +337,14 @@ void Camera::configureImageSettings()
         m_imageSettings = settingsDialog.imageSettings();
         m_imageCapture->setEncodingSettings(m_imageSettings);
 
-        ui->viewfinder->updateImageSize(m_imageSettings.resolution());
+        {
+            QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
+            settings.beginGroup("camera");
+            settings.setValue("resolution", m_imageSettings.resolution());
+            settings.endGroup();
+        }
+
+        isFirstFrame = false;
     }
 }
 
@@ -434,6 +452,18 @@ void Camera::updateCameraState(QCamera::State state)
         ui->captureWidget->setEnabled(true);
         ui->actionSettings->setEnabled(true);
         ui->stackedWidget->setCurrentIndex(0);
+
+        {
+            if (m_camera->exposure()->isExposureModeSupported(QCameraExposure::ExposureManual)) {
+                m_camera->exposure()->setExposureMode(QCameraExposure::ExposureManual);
+                m_camera->exposure()->setManualIsoSensitivity(100);
+            }
+            /*
+            if (m_camera->focus()->isFocusModeSupported(QCameraFocus::ManualFocus)) {
+                m_camera->focus()->setFocusMode(QCameraFocus::ManualFocus);
+            }
+*/
+        }
         break;
     case QCamera::UnloadedState:
     case QCamera::LoadedState:
@@ -538,7 +568,7 @@ void Camera::initGoodsInfo()
         quint64 id = index.data(Qt::UserRole + 1).toULongLong();
         auto bracode = index.data(Qt::UserRole + 2).toString().toStdString();
         auto name = index.data().toString().toStdString();
-        mWorkThread->studying({ id, name, bracode });
+        mWorkThread->studying({ 0, id, name, bracode });
     });
 }
 
@@ -548,14 +578,29 @@ void Camera::initRecogInfo()
     auto model = new RecogModel(this);
     ui->recog_lst->setModel(model);
 
-    connect(mWorkThread, &WorkThread::recogFinised, this, [model](const QList<SearchResult>& data) {
+    connect(ui->recog_lst, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex& index) {
+        bool show = index.data(Qt::UserRole + 12).toBool();
+
+        auto tempId = index.data(Qt::UserRole + 8).toUInt();
+        quint64 id = index.data(Qt::UserRole + 1).toULongLong();
+        auto bracode = index.data(Qt::UserRole + 2).toString().toStdString();
+        auto name = index.data().toString().toStdString();
+
+        if (!show) {
+            mWorkThread->studying({ tempId, id, name, bracode });
+        } else {
+            ui->statusbar->showMessage("请选择评分高的商品");
+        }
+    });
+
+    connect(mWorkThread, &WorkThread::recogFinised, this, [model](const QList<RecogResult>& data) {
         model->clear();
         if (data.isEmpty()) {
             model->addRows({});
         } else {
-            QList<SearchResult> copy;
+            QList<RecogResult> copy;
 
-            std::copy_if(data.cbegin(), data.cend(), std::back_inserter(copy), [](const SearchResult& r) {
+            std::copy_if(data.cbegin(), data.cend(), std::back_inserter(copy), [](const RecogResult& r) {
                 return r.similarity > 0.8;
             });
 

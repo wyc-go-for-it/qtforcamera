@@ -16,6 +16,8 @@ void GoodsModel::loadData()
 
     for (uint32_t i = 0; i < count; ++i) {
         ProductRecord item;
+        ifs.read(reinterpret_cast<char*>(&item.tempId), sizeof(item.tempId));
+
         ifs.read(reinterpret_cast<char*>(&item.id), sizeof(item.id));
 
         uint32_t nameLen = 0;
@@ -31,7 +33,10 @@ void GoodsModel::loadData()
         item.feature.resize(ProductFeatureEngine::featureDim);
         ifs.read(reinterpret_cast<char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
 
+        ifs.read(reinterpret_cast<char*>(&item.matchCount), sizeof(item.matchCount));
+
         if (!lst.contains(item)) {
+            item.feature = {};
             lst.push_back(item);
         }
     }

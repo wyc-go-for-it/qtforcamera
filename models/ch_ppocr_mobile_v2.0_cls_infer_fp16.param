@@ -1,0 +1,110 @@
+7767517
+108 124
+Input                    x                        0 1 input
+Convolution              Conv@0                   1 1 input hardswish_0.tmp_0 0=8 1=3 3=2 4=1 5=1 6=216 9=6 -23310=2,1.666667e-01,5.000000e-01
+Convolution              Conv@1                   1 1 hardswish_0.tmp_0 relu_0.tmp_0 0=8 1=1 5=1 6=64 9=1
+ConvolutionDepthWise     Conv@2                   1 1 relu_0.tmp_0 relu_1.tmp_0 0=8 1=3 13=2 4=1 5=1 6=72 7=8 9=1
+Split                    splitncnn_0              1 2 relu_1.tmp_0 relu_1.tmp_0_splitncnn_0 relu_1.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@0      1 1 relu_1.tmp_0_splitncnn_1 pool2d_0.tmp_0 0=1 4=1
+InnerProduct             Conv@3                   1 1 pool2d_0.tmp_0 relu_2.tmp_0 0=2 1=1 2=16 9=1
+InnerProduct             Conv@4                   1 1 relu_2.tmp_0 conv2d_56.tmp_0 0=8 1=1 2=16
+HardSigmoid              HardSigmoid@0            1 1 conv2d_56.tmp_0 hardsigmoid_0.tmp_0
+BinaryOp                 Mul@1                    2 1 relu_1.tmp_0_splitncnn_0 hardsigmoid_0.tmp_0 tmp_0 0=2
+Convolution              Conv@5                   1 1 tmp_0 conv2d_57.tmp_0 0=8 1=1 5=1 6=64
+Convolution              Conv@6                   1 1 conv2d_57.tmp_0 relu_3.tmp_0 0=24 1=1 5=1 6=192 9=1
+ConvolutionDepthWise     Conv@7                   1 1 relu_3.tmp_0 relu_4.tmp_0 0=24 1=3 13=2 4=1 5=1 6=216 7=24 9=1
+Convolution              Conv@8                   1 1 relu_4.tmp_0 conv2d_59.tmp_0 0=8 1=1 5=1 6=192
+Split                    splitncnn_1              1 2 conv2d_59.tmp_0 conv2d_59.tmp_0_splitncnn_0 conv2d_59.tmp_0_splitncnn_1
+Convolution              Conv@9                   1 1 conv2d_59.tmp_0_splitncnn_1 relu_5.tmp_0 0=32 1=1 5=1 6=256 9=1
+ConvolutionDepthWise     Conv@10                  1 1 relu_5.tmp_0 relu_6.tmp_0 0=32 1=3 4=1 5=1 6=288 7=32 9=1
+Convolution              Conv@11                  1 1 relu_6.tmp_0 conv2d_61.tmp_0 0=8 1=1 5=1 6=256
+BinaryOp                 Add@3                    2 1 conv2d_59.tmp_0_splitncnn_0 conv2d_61.tmp_0 elementwise_add_0
+Convolution              Conv@12                  1 1 elementwise_add_0 hardswish_1.tmp_0 0=32 1=1 5=1 6=256 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@13                  1 1 hardswish_1.tmp_0 hardswish_2.tmp_0 0=32 1=5 13=2 4=2 5=1 6=800 7=32 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_2              1 2 hardswish_2.tmp_0 hardswish_2.tmp_0_splitncnn_0 hardswish_2.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@1      1 1 hardswish_2.tmp_0_splitncnn_1 pool2d_1.tmp_0 0=1 4=1
+InnerProduct             Conv@14                  1 1 pool2d_1.tmp_0 relu_7.tmp_0 0=8 1=1 2=256 9=1
+InnerProduct             Conv@15                  1 1 relu_7.tmp_0 conv2d_64.tmp_0 0=32 1=1 2=256
+HardSigmoid              HardSigmoid@1            1 1 conv2d_64.tmp_0 hardsigmoid_1.tmp_0
+BinaryOp                 Mul@4                    2 1 hardswish_2.tmp_0_splitncnn_0 hardsigmoid_1.tmp_0 tmp_1 0=2
+Convolution              Conv@16                  1 1 tmp_1 conv2d_65.tmp_0 0=16 1=1 5=1 6=512
+Split                    splitncnn_3              1 2 conv2d_65.tmp_0 conv2d_65.tmp_0_splitncnn_0 conv2d_65.tmp_0_splitncnn_1
+Convolution              Conv@17                  1 1 conv2d_65.tmp_0_splitncnn_1 hardswish_3.tmp_0 0=88 1=1 5=1 6=1408 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@18                  1 1 hardswish_3.tmp_0 hardswish_4.tmp_0 0=88 1=5 4=2 5=1 6=2200 7=88 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_4              1 2 hardswish_4.tmp_0 hardswish_4.tmp_0_splitncnn_0 hardswish_4.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@2      1 1 hardswish_4.tmp_0_splitncnn_1 pool2d_2.tmp_0 0=1 4=1
+InnerProduct             Conv@19                  1 1 pool2d_2.tmp_0 relu_8.tmp_0 0=22 1=1 2=1936 9=1
+InnerProduct             Conv@20                  1 1 relu_8.tmp_0 conv2d_68.tmp_0 0=88 1=1 2=1936
+HardSigmoid              HardSigmoid@2            1 1 conv2d_68.tmp_0 hardsigmoid_2.tmp_0
+BinaryOp                 Mul@7                    2 1 hardswish_4.tmp_0_splitncnn_0 hardsigmoid_2.tmp_0 tmp_2 0=2
+Convolution              Conv@21                  1 1 tmp_2 conv2d_69.tmp_0 0=16 1=1 5=1 6=1408
+BinaryOp                 Add@12                   2 1 conv2d_65.tmp_0_splitncnn_0 conv2d_69.tmp_0 elementwise_add_1
+Split                    splitncnn_5              1 2 elementwise_add_1 elementwise_add_1_splitncnn_0 elementwise_add_1_splitncnn_1
+Convolution              Conv@22                  1 1 elementwise_add_1_splitncnn_1 hardswish_5.tmp_0 0=88 1=1 5=1 6=1408 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@23                  1 1 hardswish_5.tmp_0 hardswish_6.tmp_0 0=88 1=5 4=2 5=1 6=2200 7=88 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_6              1 2 hardswish_6.tmp_0 hardswish_6.tmp_0_splitncnn_0 hardswish_6.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@3      1 1 hardswish_6.tmp_0_splitncnn_1 pool2d_3.tmp_0 0=1 4=1
+InnerProduct             Conv@24                  1 1 pool2d_3.tmp_0 relu_9.tmp_0 0=22 1=1 2=1936 9=1
+InnerProduct             Conv@25                  1 1 relu_9.tmp_0 conv2d_72.tmp_0 0=88 1=1 2=1936
+HardSigmoid              HardSigmoid@3            1 1 conv2d_72.tmp_0 hardsigmoid_3.tmp_0
+BinaryOp                 Mul@10                   2 1 hardswish_6.tmp_0_splitncnn_0 hardsigmoid_3.tmp_0 tmp_3 0=2
+Convolution              Conv@26                  1 1 tmp_3 conv2d_73.tmp_0 0=16 1=1 5=1 6=1408
+BinaryOp                 Add@17                   2 1 elementwise_add_1_splitncnn_0 conv2d_73.tmp_0 elementwise_add_2
+Split                    splitncnn_7              1 2 elementwise_add_2 elementwise_add_2_splitncnn_0 elementwise_add_2_splitncnn_1
+Convolution              Conv@27                  1 1 elementwise_add_2_splitncnn_1 hardswish_7.tmp_0 0=40 1=1 5=1 6=640 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@28                  1 1 hardswish_7.tmp_0 hardswish_8.tmp_0 0=40 1=5 4=2 5=1 6=1000 7=40 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_8              1 2 hardswish_8.tmp_0 hardswish_8.tmp_0_splitncnn_0 hardswish_8.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@4      1 1 hardswish_8.tmp_0_splitncnn_1 pool2d_4.tmp_0 0=1 4=1
+InnerProduct             Conv@29                  1 1 pool2d_4.tmp_0 relu_10.tmp_0 0=10 1=1 2=400 9=1
+InnerProduct             Conv@30                  1 1 relu_10.tmp_0 conv2d_76.tmp_0 0=40 1=1 2=400
+HardSigmoid              HardSigmoid@4            1 1 conv2d_76.tmp_0 hardsigmoid_4.tmp_0
+BinaryOp                 Mul@13                   2 1 hardswish_8.tmp_0_splitncnn_0 hardsigmoid_4.tmp_0 tmp_4 0=2
+Convolution              Conv@31                  1 1 tmp_4 conv2d_77.tmp_0 0=16 1=1 5=1 6=640
+BinaryOp                 Add@22                   2 1 elementwise_add_2_splitncnn_0 conv2d_77.tmp_0 elementwise_add_3
+Split                    splitncnn_9              1 2 elementwise_add_3 elementwise_add_3_splitncnn_0 elementwise_add_3_splitncnn_1
+Convolution              Conv@32                  1 1 elementwise_add_3_splitncnn_1 hardswish_9.tmp_0 0=48 1=1 5=1 6=768 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@33                  1 1 hardswish_9.tmp_0 hardswish_10.tmp_0 0=48 1=5 4=2 5=1 6=1200 7=48 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_10             1 2 hardswish_10.tmp_0 hardswish_10.tmp_0_splitncnn_0 hardswish_10.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@5      1 1 hardswish_10.tmp_0_splitncnn_1 pool2d_5.tmp_0 0=1 4=1
+InnerProduct             Conv@34                  1 1 pool2d_5.tmp_0 relu_11.tmp_0 0=12 1=1 2=576 9=1
+InnerProduct             Conv@35                  1 1 relu_11.tmp_0 conv2d_80.tmp_0 0=48 1=1 2=576
+HardSigmoid              HardSigmoid@5            1 1 conv2d_80.tmp_0 hardsigmoid_5.tmp_0
+BinaryOp                 Mul@16                   2 1 hardswish_10.tmp_0_splitncnn_0 hardsigmoid_5.tmp_0 tmp_5 0=2
+Convolution              Conv@36                  1 1 tmp_5 conv2d_81.tmp_0 0=16 1=1 5=1 6=768
+BinaryOp                 Add@27                   2 1 elementwise_add_3_splitncnn_0 conv2d_81.tmp_0 elementwise_add_4
+Convolution              Conv@37                  1 1 elementwise_add_4 hardswish_11.tmp_0 0=104 1=1 5=1 6=1664 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@38                  1 1 hardswish_11.tmp_0 hardswish_12.tmp_0 0=104 1=5 13=2 4=2 5=1 6=2600 7=104 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_11             1 2 hardswish_12.tmp_0 hardswish_12.tmp_0_splitncnn_0 hardswish_12.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@6      1 1 hardswish_12.tmp_0_splitncnn_1 pool2d_6.tmp_0 0=1 4=1
+InnerProduct             Conv@39                  1 1 pool2d_6.tmp_0 relu_12.tmp_0 0=26 1=1 2=2704 9=1
+InnerProduct             Conv@40                  1 1 relu_12.tmp_0 conv2d_84.tmp_0 0=104 1=1 2=2704
+HardSigmoid              HardSigmoid@6            1 1 conv2d_84.tmp_0 hardsigmoid_6.tmp_0
+BinaryOp                 Mul@19                   2 1 hardswish_12.tmp_0_splitncnn_0 hardsigmoid_6.tmp_0 tmp_6 0=2
+Convolution              Conv@41                  1 1 tmp_6 conv2d_85.tmp_0 0=32 1=1 5=1 6=3328
+Split                    splitncnn_12             1 2 conv2d_85.tmp_0 conv2d_85.tmp_0_splitncnn_0 conv2d_85.tmp_0_splitncnn_1
+Convolution              Conv@42                  1 1 conv2d_85.tmp_0_splitncnn_1 hardswish_13.tmp_0 0=200 1=1 5=1 6=6400 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@43                  1 1 hardswish_13.tmp_0 hardswish_14.tmp_0 0=200 1=5 4=2 5=1 6=5000 7=200 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_13             1 2 hardswish_14.tmp_0 hardswish_14.tmp_0_splitncnn_0 hardswish_14.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@7      1 1 hardswish_14.tmp_0_splitncnn_1 pool2d_7.tmp_0 0=1 4=1
+InnerProduct             Conv@44                  1 1 pool2d_7.tmp_0 relu_13.tmp_0 0=50 1=1 2=10000 9=1
+InnerProduct             Conv@45                  1 1 relu_13.tmp_0 conv2d_88.tmp_0 0=200 1=1 2=10000
+HardSigmoid              HardSigmoid@7            1 1 conv2d_88.tmp_0 hardsigmoid_7.tmp_0
+BinaryOp                 Mul@22                   2 1 hardswish_14.tmp_0_splitncnn_0 hardsigmoid_7.tmp_0 tmp_7 0=2
+Convolution              Conv@46                  1 1 tmp_7 conv2d_89.tmp_0 0=32 1=1 5=1 6=6400
+BinaryOp                 Add@36                   2 1 conv2d_85.tmp_0_splitncnn_0 conv2d_89.tmp_0 elementwise_add_5
+Split                    splitncnn_14             1 2 elementwise_add_5 elementwise_add_5_splitncnn_0 elementwise_add_5_splitncnn_1
+Convolution              Conv@47                  1 1 elementwise_add_5_splitncnn_1 hardswish_15.tmp_0 0=200 1=1 5=1 6=6400 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     Conv@48                  1 1 hardswish_15.tmp_0 hardswish_16.tmp_0 0=200 1=5 4=2 5=1 6=5000 7=200 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_15             1 2 hardswish_16.tmp_0 hardswish_16.tmp_0_splitncnn_0 hardswish_16.tmp_0_splitncnn_1
+Pooling                  GlobalAveragePool@8      1 1 hardswish_16.tmp_0_splitncnn_1 pool2d_8.tmp_0 0=1 4=1
+InnerProduct             Conv@49                  1 1 pool2d_8.tmp_0 relu_14.tmp_0 0=50 1=1 2=10000 9=1
+InnerProduct             Conv@50                  1 1 relu_14.tmp_0 conv2d_92.tmp_0 0=200 1=1 2=10000
+HardSigmoid              HardSigmoid@8            1 1 conv2d_92.tmp_0 hardsigmoid_8.tmp_0
+BinaryOp                 Mul@25                   2 1 hardswish_16.tmp_0_splitncnn_0 hardsigmoid_8.tmp_0 tmp_8 0=2
+Convolution              Conv@51                  1 1 tmp_8 conv2d_93.tmp_0 0=32 1=1 5=1 6=6400
+BinaryOp                 Add@41                   2 1 elementwise_add_5_splitncnn_0 conv2d_93.tmp_0 elementwise_add_6
+Convolution              Conv@52                  1 1 elementwise_add_6 hardswish_17.tmp_0 0=200 1=1 5=1 6=6400 9=6 -23310=2,1.666667e-01,5.000000e-01
+Pooling                  MaxPool@0                1 1 hardswish_17.tmp_0 pool2d_9.tmp_0 1=2 2=2 5=1
+Pooling                  GlobalAveragePool@9      1 1 pool2d_9.tmp_0 reshape2_0.tmp_0 0=1 4=1
+InnerProduct             MatMul@0                 1 1 reshape2_0.tmp_0 linear_1.tmp_1 0=2 1=1 2=400
+Softmax                  Softmax@0                1 1 linear_1.tmp_1 output

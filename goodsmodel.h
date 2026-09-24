@@ -3,6 +3,7 @@
 
 #include "productdatabase.h"
 #include "qobject.h"
+#include "workthread.h"
 
 #include <QAbstractListModel>
 #include <QList>
@@ -109,7 +110,7 @@ private:
     void loadData();
 };
 
-class RecogModel : public BasetModel<SearchResult> {
+class RecogModel : public BasetModel<RecogResult> {
 public:
     explicit RecogModel(QObject* parent)
         : BasetModel(parent) {
@@ -128,6 +129,10 @@ public:
             return lst.at(index.row()).id;
         } else if (role == Qt::UserRole + 9) {
             return lst.at(index.row()).similarity;
+        } else if (role == Qt::UserRole + 8) {
+            return lst.at(index.row()).tempId;
+        } else if (role == Qt::UserRole + 12) {
+            return lst.at(index.row()).show;
         }
 
         return {};

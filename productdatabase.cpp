@@ -19,18 +19,133 @@ void ProductDatabase::rebuildMatrix()
 
 bool ProductDatabase::addProduct(const ProductRecord& record)
 {
+    static const int MAX_TEMPLATES = 5; // 每个商品最多保留 5 个姿态模板
+    static const float MERGE_THRESH = 0.85f; // 判定为相同姿态的相似度阈值
+
     if (record.feature.size() != static_cast<size_t>(ProductFeatureEngine::featureDim)) {
         return false;
     }
+    ProductRecord newRecord = record;
 
-    records.push_back(record);
+    if (!lastResults.empty() && newRecord.tempId > 0) { // 校准商品
+        for (const auto& result : lastResults) {
+            if (result.id != newRecord.id && result.similarity <= MERGE_THRESH) {
+                removeTemplateAt(result.recordIndex);
+            }
+        }
+    }
 
-    rebuildMatrix();
+    std::vector<size_t> matchedIndices;
 
+    const auto id = newRecord.id;
+    for (size_t i = 0, size = records.size(); i < size; ++i) {
+        if (records.at(i).id == id) {
+            matchedIndices.push_back(i);
+        }
+    }
+
+    std::cout << "tempId:" << newRecord.tempId << " matchedIndices:" << matchedIndices.size() << std::endl;
+
+    if (newRecord.tempId == 0 && matchedIndices.size() < MAX_TEMPLATES) {
+        newRecord.tempId = (++maxTempId);
+        appendTemplate(newRecord);
+    } else {
+
+        int bestIdx = -1;
+        float maxScore = -1.0f;
+
+        for (size_t i = 0; i < matchedIndices.size(); ++i) {
+            size_t idx = matchedIndices.at(i);
+            float score = ProductFeatureEngine::computeSimilarity(records.at(idx).feature, newRecord.feature);
+            if (score > maxScore) {
+                maxScore = score;
+                bestIdx = idx;
+            }
+        }
+
+        if (bestIdx != -1 && maxScore >= MERGE_THRESH) {
+            records.at(bestIdx).matchCount++;
+
+            auto& existFeature = records.at(bestIdx).feature;
+            ProductFeatureEngine::reinforceFeatureVector(existFeature, newRecord.feature);
+            updateTemplateFeature(bestIdx, existFeature);
+
+            std::cout << "bestIdx:" << bestIdx << " maxScore:" << maxScore << " matchCount:" << records.at(bestIdx).matchCount << std::endl;
+        } else {
+            if (matchedIndices.size() >= MAX_TEMPLATES) {
+                int targetEliminateIdx = -1;
+                uint32_t minCount = UINT32_MAX;
+
+                for (size_t idx : matchedIndices) {
+                    if (records.at(idx).matchCount <= minCount) {
+                        minCount = records.at(idx).matchCount;
+                        targetEliminateIdx = static_cast<int>(idx);
+                    }
+                }
+
+                std::cout << "targetEliminateIdx:" << targetEliminateIdx << std::endl;
+
+                if (targetEliminateIdx != -1) {
+                    if (records.at(targetEliminateIdx).matchCount == 0) {
+                        ProductFeatureEngine::reinforceFeatureVector(newRecord.feature, records.at(targetEliminateIdx).feature);
+                    }
+                    newRecord.tempId = records.at(targetEliminateIdx).tempId;
+                    removeTemplateAt(targetEliminateIdx);
+                }
+            }
+
+            appendTemplate(newRecord);
+        }
+    }
     return true;
 }
 
-bool ProductDatabase::saveToFile(const std::string& filepath)
+void ProductDatabase::updateTemplateFeature(size_t targetIdx, const std::vector<float>& newFeature)
+{
+    if (targetIdx >= records.size())
+        return;
+
+    records[targetIdx].feature = newFeature;
+
+    float* rowPtr = featureMatrix.ptr<float>(static_cast<int>(targetIdx));
+    std::copy(newFeature.begin(), newFeature.end(), rowPtr);
+}
+
+void ProductDatabase::appendTemplate(const ProductRecord& newRecord)
+{
+    records.push_back(newRecord);
+
+    cv::Mat rowMat(1, ProductFeatureEngine::featureDim, CV_32F, const_cast<float*>(newRecord.feature.data()));
+
+    if (featureMatrix.empty()) {
+        featureMatrix = rowMat.clone();
+    } else {
+        featureMatrix.push_back(rowMat);
+    }
+}
+
+void ProductDatabase::removeTemplateAt(size_t removeIdx)
+{
+    if (removeIdx >= records.size())
+        return;
+
+    size_t lastIdx = records.size() - 1;
+
+    if (removeIdx != lastIdx) {
+        records[removeIdx] = std::move(records[lastIdx]);
+
+        cv::Mat lastRow = featureMatrix.row(static_cast<int>(lastIdx));
+        cv::Mat targetRow = featureMatrix.row(static_cast<int>(removeIdx));
+
+        lastRow.copyTo(targetRow);
+    }
+
+    records.pop_back();
+
+    featureMatrix = featureMatrix.rowRange(0, static_cast<int>(records.size()));
+}
+
+bool ProductDatabase::saveModel(const std::string& filepath)
 {
     std::ofstream ofs(filepath, std::ios::binary);
     if (!ofs.is_open())
@@ -40,6 +155,8 @@ bool ProductDatabase::saveToFile(const std::string& filepath)
     ofs.write(reinterpret_cast<const char*>(&count), sizeof(count));
 
     for (const auto& item : records) {
+        ofs.write(reinterpret_cast<const char*>(&item.tempId), sizeof(item.tempId));
+
         ofs.write(reinterpret_cast<const char*>(&item.id), sizeof(item.id));
 
         // 写入变长字符串 (Name)
@@ -54,11 +171,13 @@ bool ProductDatabase::saveToFile(const std::string& filepath)
 
         // 写入 featureDim 维 float 特征数组
         ofs.write(reinterpret_cast<const char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
+
+        ofs.write(reinterpret_cast<const char*>(&item.matchCount), sizeof(item.matchCount));
     }
     return true;
 }
 
-bool ProductDatabase::loadFromFile(const std::string& filepath)
+bool ProductDatabase::loadModel(const std::string& filepath)
 {
     std::ifstream ifs(filepath, std::ios::binary);
     if (!ifs.is_open())
@@ -70,6 +189,8 @@ bool ProductDatabase::loadFromFile(const std::string& filepath)
 
     for (uint32_t i = 0; i < count; ++i) {
         ProductRecord item;
+        ifs.read(reinterpret_cast<char*>(&item.tempId), sizeof(item.tempId));
+
         ifs.read(reinterpret_cast<char*>(&item.id), sizeof(item.id));
 
         uint32_t nameLen = 0;
@@ -84,6 +205,10 @@ bool ProductDatabase::loadFromFile(const std::string& filepath)
 
         item.feature.resize(ProductFeatureEngine::featureDim);
         ifs.read(reinterpret_cast<char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
+
+        ifs.read(reinterpret_cast<char*>(&item.matchCount), sizeof(item.matchCount));
+
+        maxTempId = std::max(maxTempId, item.tempId);
 
         records.push_back(item);
     }
@@ -117,23 +242,13 @@ std::vector<SearchResult> ProductDatabase::search(const std::vector<float>& quer
         [](const auto& a, const auto& b) { return a.first > b.first; });
 
     // 组装返回结果
-    std::vector<SearchResult> results;
+    lastResults.clear();
     for (size_t i = 0; i < std::min<size_t>(topK, scoreIndexMap.size()); ++i) {
         size_t idx = scoreIndexMap[i].second;
-        results.push_back({ records[idx].id,
+        lastResults.push_back({ records[idx].tempId, records[idx].id,
             records[idx].name,
             records[idx].barcode,
-            scoreIndexMap[i].first });
+            scoreIndexMap[i].first, idx });
     }
-    return results;
-}
-
-std::vector<float> ProductDatabase::searchVec(uint64 id)
-{
-    for (const auto& r : records) {
-        if (r.id == id) {
-            return r.feature;
-        }
-    }
-    return {};
+    return lastResults;
 }

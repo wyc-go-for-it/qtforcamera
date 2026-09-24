@@ -1,6 +1,8 @@
 #include "productfeatureengine.h"
 #include <cmath>
 
+FeatureWeights ProductFeatureEngine::m_featureWeights = { 0.6f, 0.8f, 1.0f };
+
 std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, const cv::Mat& fg, double minArea, bool rotation)
 {
     if (bg.empty() || fg.empty() || bg.size() != fg.size())
@@ -271,17 +273,7 @@ std::vector<float> ProductFeatureEngine::extractFourierShapeFeature(const cv::Ma
     }
 
     // 6. 子特征内部 L2 归一化（确保所有数值 >= 0 且模长为 1）
-    float sumSq = 0.0f;
-    for (float v : feature) {
-        sumSq += v * v;
-    }
-    float norm = std::sqrt(sumSq);
-
-    if (norm > 1e-6f) {
-        for (float& v : feature) {
-            v /= norm;
-        }
-    }
+    normalizeVector(feature);
 
     return feature; // 返回非负且模长为 1 的特征向量
 }
@@ -326,13 +318,13 @@ std::vector<float> ProductFeatureEngine::extractTextureFeature(const cv::Mat& ro
     return vec;
 }
 
-std::vector<float> ProductFeatureEngine::extract(const cv::Mat& roi, const cv::Mat& croppedMask, FeatureWeights weights)
+std::vector<float> ProductFeatureEngine::extractVisual(const cv::Mat& roi, const cv::Mat& croppedMask)
 {
     if (roi.empty())
         return {};
 
     auto colorVec = extractColorFeature(roi, croppedMask); // 128
-    auto shapeVec = extractShapeFeature(roi, croppedMask); // 71
+    auto shapeVec = extractShapeFeature(roi, croppedMask); // 64
     auto textureVec = extractTextureFeature(roi, croppedMask); // 256
 
     std::vector<float> feature;
@@ -340,11 +332,11 @@ std::vector<float> ProductFeatureEngine::extract(const cv::Mat& roi, const cv::M
 
     // 加权融合
     for (float v : colorVec)
-        feature.push_back(v * weights.color);
+        feature.push_back(v * m_featureWeights.color);
     for (float v : shapeVec)
-        feature.push_back(v * weights.shape);
+        feature.push_back(v * m_featureWeights.shape);
     for (float v : textureVec)
-        feature.push_back(v * weights.texture);
+        feature.push_back(v * m_featureWeights.texture);
 
     // 全局 L2 归一化
     normalizeVector(feature);
@@ -376,6 +368,29 @@ float ProductFeatureEngine::computeSimilarity(const std::vector<float>& vecA, co
     return dot;
 }
 
+std::vector<float> ProductFeatureEngine::fuseFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text, float wVisual, float wText)
+{
+    std::vector<float> fused;
+    fused.reserve(featureDim);
+
+    auto visualFeature = extractVisual(roi, croppedMask);
+
+    // A. 追加并加权图片特征 (VISUAL_DIM 维)
+    for (size_t i = 0; i < VISUAL_DIM && i < visualFeature.size(); ++i) {
+        fused.push_back(visualFeature[i] * wVisual);
+    }
+
+    // B. 提取并加权名称特征 (TEXT_DIM 维)
+    std::vector<float> textVec = extractTextFeature(text);
+    for (float val : textVec) {
+        fused.push_back(val * wText);
+    }
+
+    // C. 整体重新进行 L2 归一化，使得矩阵乘法点积结果仍处于 [0.0, 1.0] 范围内
+    normalizeVector(fused);
+    return fused;
+}
+
 void ProductFeatureEngine::normalizeVector(std::vector<float>& vec)
 {
     float sumSq = 0.0f;
@@ -386,4 +401,59 @@ void ProductFeatureEngine::normalizeVector(std::vector<float>& vec)
         for (float& v : vec)
             v /= norm;
     }
+}
+
+std::vector<float> ProductFeatureEngine::extractTextFeature(const std::string& name)
+{
+    std::vector<float> textVec(TEXT_DIM, 0.0f);
+    if (name.empty())
+        return textVec;
+
+    std::vector<std::string> charList;
+    charList.reserve(name.size());
+
+    size_t i = 0;
+    while (i < name.size()) {
+        unsigned char c = name[i];
+        size_t charLen = 1;
+
+        // 根据 UTF-8 首字节判断当前字符占用的字节长度
+        if ((c & 0x80) == 0)
+            charLen = 1; // ASCII
+        else if ((c & 0xE0) == 0xC0)
+            charLen = 2; // 2字节字符
+        else if ((c & 0xF0) == 0xE0)
+            charLen = 3; // 常见汉字（3字节）
+        else if ((c & 0xF8) == 0xF0)
+            charLen = 4; // 4字节字符（如Emoji）
+
+        // 边界防护
+        if (i + charLen > name.size())
+            break;
+
+        charList.push_back(name.substr(i, charLen));
+        i += charLen;
+    }
+
+    // 提取单字与双字 N-Gram 并映射到 Hash 桶中
+    std::hash<std::string> hasher;
+
+    // 第二步：基于 UTF-8 字符列表提取 Unigram 和 Bigram
+    for (size_t i = 0; i < charList.size(); ++i) {
+        // --- 1. Unigram (单字) ---
+        const std::string& unigram = charList[i];
+        size_t bucket1 = hasher(unigram) % TEXT_DIM;
+        textVec[bucket1] += 1.0f;
+
+        // --- 2. Bigram (双字词) ---
+        if (i + 1 < charList.size()) {
+            std::string bigram = charList[i] + charList[i + 1];
+            size_t bucket2 = hasher(bigram) % TEXT_DIM;
+            textVec[bucket2] += 1.5f; // 连续双字赋予更高权重
+        }
+    }
+
+    normalizeVector(textVec); // 归一化
+
+    return textVec;
 }
