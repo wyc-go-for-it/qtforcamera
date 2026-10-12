@@ -13,8 +13,8 @@ if(ANDROID)
     set(QT_ANDROID_PACKAGE_SOURCE_DIR "\"android-package-source-directory\": \"${CMAKE_CURRENT_SOURCE_DIR}/android\"," CACHE STRING "" FORCE)
 endif()
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets OpenGL)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets OpenGL)
 
 if(ANDROID)
     find_package(Qt5 REQUIRED COMPONENTS AndroidExtras)
@@ -32,6 +32,9 @@ set(HEADER
     goodsmodel.h
     goodsdelegate.h
     producttextcleaner.h
+    customglsurface.h
+    glrendererwidget.h
+    yoloncnn.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -50,6 +53,9 @@ set(SOURCES
     goodsmodel.cpp
     goodsdelegate.cpp
     producttextcleaner.cpp
+    customglsurface.cpp
+    glrendererwidget.cpp
+    yoloncnn.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -74,7 +80,7 @@ qt_add_resources(RESOURCES res.qrc)
 # 针对 MSVC 编译器添加 /utf-8 选项
 if(MSVC)
     add_compile_options(/wd4251)
-
+    add_compile_options(/arch:AVX2)
     # 针对 Debug 配置
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/bin/Debug)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_SOURCE_DIR}/target/lib/Debug)
@@ -88,23 +94,23 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-#ocr
 
 #NCNN 依赖
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/include)
 if(WIN32)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/win/include)
     add_definitions(-DNOMINMAX)
     set(NCNN_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/win/lib/ncnn.lib" )
 elseif(ANDROID)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/android/include)
     set(NCNN_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/android/${ANDROID_ABI}/lib/libncnn.a")
 endif()
 
+#ocr
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/ocr_src/include
 )
 
 file(GLOB OCR_CORE_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/ocr_src/*.cpp)
-
 #end ocr
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -162,10 +168,19 @@ target_link_libraries(qtforcamera PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Multimedia
     Qt${QT_VERSION_MAJOR}::MultimediaWidgets
+    Qt${QT_VERSION_MAJOR}::OpenGL
 )
 
 if(ANDROID)
-    target_link_libraries(qtforcamera PRIVATE Qt5::AndroidExtras)
+    find_library(GLESV3_LIB GLESv3 REQUIRED)
+elseif(WIN32)
+    find_library(OPENGL_LIB opengl32 REQUIRED)
+endif()
+
+if(ANDROID)
+    target_link_libraries(qtforcamera PRIVATE Qt5::AndroidExtras ${GLESV3_LIB})
+elseif(WIN32)
+    target_link_libraries(qtforcamera PRIVATE ${OPENGL_LIB})
 endif()
 
 #link ocr
@@ -178,6 +193,23 @@ if(WIN32)
             $<$<NOT:$<CONFIG:Debug>>:${OCR_WIN_DLL_DIR}/bin/ncnn.dll>
             "$<TARGET_FILE_DIR:qtforcamera>"
         COMMAND_EXPAND_LISTS
+    )
+elseif(ANDROID)
+    set(OCR_ANDROID_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/android")
+
+    add_library(ocr_static STATIC IMPORTED)
+
+    file(GLOB OCR_ANDROID_STATIC_LIBS
+            "${OCR_ANDROID_DLL_DIR}/${ANDROID_ABI}/lib/*.a"
+        )
+
+    target_compile_options(qtforcamera PRIVATE -fopenmp)
+    target_link_options(qtforcamera PRIVATE -fopenmp -static-openmp)
+
+    target_link_libraries(qtforcamera PRIVATE
+        -Wl,--gc-sections -s
+        ${OCR_ANDROID_STATIC_LIBS}
+        log
     )
 endif()
 #end link ocr
@@ -227,6 +259,7 @@ elseif(ANDROID)
         )
 
     target_link_libraries(qtforcamera PRIVATE
+        -Wl,--gc-sections -s
         -Wl,--start-group
         ${ANDROID_STATIC_LIBS}
         ${OPENCV_3RDPARTY_LIBS}
@@ -270,16 +303,16 @@ set_target_properties(qtforcamera PROPERTIES
 )
 
 #安装
-#if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-#    set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/target/install" CACHE PATH "Default install prefix" FORCE)
-#endif()
-#include(GNUInstallDirs)
-#install(TARGETS qtforcamera
-#    BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}   # macOS bundle (.app)
-#    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}   # Windows / Linux 可执行文件 (.exe)
-#    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 动态库 (.so / .dylib)
-#    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 静态库 (.a / .lib)
-#)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Default install prefix" FORCE)
+endif()
+include(GNUInstallDirs)
+install(TARGETS qtforcamera
+    BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}   # macOS bundle (.app)
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}   # Windows / Linux 可执行文件 (.exe)
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 动态库 (.so / .dylib)
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}   # 静态库 (.a / .lib)
+)
 
 #向下兼容 Qt 5 避免编译时出现 Unknown CMake command "qt_finalize_executable" 的报错
 if(QT_VERSION_MAJOR EQUAL 6)

@@ -20,7 +20,7 @@ std::pair<cv::Mat, cv::Mat> ProductFeatureEngine::cropROI(const cv::Mat& bg, con
     else if (fg.channels() == 1)
         cv::cvtColor(fg, fg3ch, cv::COLOR_GRAY2BGR);
 
-    // 2. 适当降低模糊核（改为 5x5 / 7x7），保护细长笔套边缘
+    // 2. 适当降低模糊核（改为 5x5 / 7x7）
     cv::Mat bgBlur, fgBlur;
     cv::GaussianBlur(bg3ch, bgBlur, cv::Size(5, 5), 0);
     cv::GaussianBlur(fg3ch, fgBlur, cv::Size(5, 5), 0);

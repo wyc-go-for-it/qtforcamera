@@ -98,7 +98,7 @@ public:
         if (role == Qt::DisplayRole) {
             return QString::fromStdString(lst.at(index.row()).name);
         } else if (role == Qt::UserRole + 1) {
-            return lst.at(index.row()).id;
+            return static_cast<qulonglong>(lst.at(index.row()).id);
         } else if (role == Qt::UserRole + 2) {
             return QString::fromStdString(lst.at(index.row()).barcode);
         }
@@ -126,11 +126,11 @@ public:
         if (role == Qt::DisplayRole) {
             return QString::fromStdString(lst.at(index.row()).name);
         } else if (role == Qt::UserRole + 1) {
-            return lst.at(index.row()).id;
+            return static_cast<qulonglong>(lst.at(index.row()).id);
         } else if (role == Qt::UserRole + 9) {
             return lst.at(index.row()).similarity;
         } else if (role == Qt::UserRole + 8) {
-            return lst.at(index.row()).tempId;
+            return static_cast<qulonglong>(lst.at(index.row()).id);
         } else if (role == Qt::UserRole + 12) {
             return lst.at(index.row()).show;
         }

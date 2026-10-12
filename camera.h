@@ -51,12 +51,14 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
+#include "glrendererwidget.h"
 #include "workthread.h"
 #include <QCamera>
 #include <QCameraImageCapture>
 #include <QMediaRecorder>
 #include <QScopedPointer>
 
+#include <CustomGLSurface.h>
 #include <QMainWindow>
 
 QT_BEGIN_NAMESPACE
@@ -122,12 +124,13 @@ private slots:
     void readyForCapture(bool ready);
     void imageSaved(int id, const QString& fileName);
 
-    void showRecognition(const QImage& diff, const QImage& undiff, const QImage& binary_diff);
+    void showRecognition(const QImage& frame, const QImage& diff, const QImage& undiff, const QImage& binary_diff);
 
     void initGoodsInfo();
     void initRecogInfo();
 
 protected:
+    bool eventFilter(QObject* obj, QEvent* e) override;
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
@@ -146,9 +149,13 @@ private:
     bool m_isCapturingImage = false;
     bool m_applicationExiting = false;
 
-    WorkThread* mWorkThread;
+    QScopedPointer<WorkThread> mWorkThread;
 
     bool isFirstFrame = false;
+
+    QScopedPointer<CustomGLSurface> m_glSurface;
+    GLRendererWidget* m_glWindow;
+    QScopedPointer<QWidget> m_glContainer;
 };
 
 #endif

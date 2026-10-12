@@ -5,7 +5,9 @@
 #include "productdatabase.h"
 #include "producttextcleaner.h"
 #include "qthread.h"
+#include "yoloncnn.h"
 
+#include <QMutex>
 #include <QVideoFrame>
 
 struct RecogResult {
@@ -14,11 +16,18 @@ struct RecogResult {
     std::string name;
     std::string barcode;
     float similarity;
-    uint32_t recordIndex;
+    size_t recordIndex;
 
     bool show = false;
 };
 Q_DECLARE_METATYPE(RecogResult);
+
+struct DetectObject {
+    QRectF rect; // 目标框 [x, y, width, height]
+    QString name; // 类别
+    float prob; // 置信度
+};
+Q_DECLARE_METATYPE(DetectObject);
 
 class WorkThread : public QObject {
     Q_OBJECT
@@ -36,15 +45,17 @@ public slots:
     void onUpdateVertex(const QVector<QPointF>& points);
 
 signals:
-    void cropROIed(const QImage& diff, const QImage& undiff, const QImage& binary_diff);
+    void cropROIed(const QImage& frame, const QImage& diff, const QImage& undiff, const QImage& binary_diff);
     void error(const QString& error);
     void recogFinised(const QList<RecogResult>& data);
+
+    void detected(const QVector<DetectObject>& objects);
 
 private:
     void studied(const cv::Mat& cur_fg);
     void recognition(const cv::Mat& cur_fg);
     QString modelDir();
-    QString ocrModelDir();
+    QString ncnnModelDir();
     void initDir();
     cv::Mat cropVideoFrame(QVideoFrame& frame);
     void loadBG();
@@ -54,10 +65,17 @@ private:
 
     std::string detectText(const cv::Mat& cur_fg);
 
+    void initYoloModel();
+
+    Q_INVOKABLE void handleFrame();
+
 private:
     QThread m_thread;
     QAtomicInt isRecognition, isStudied;
     cv::Mat m_bg;
+    QList<QVideoFrame> m_frame_lst;
+    QMutex m_lock;
+    bool m_hanlde_frame = false;
 
     ProductDatabase m_productDatabase;
     ProductRecord m_studiedRecord;
@@ -66,6 +84,8 @@ private:
 
     QVector<QPointF> m_cropPoints; // 0:左上, 1:右上, 2:右下, 3:左下
     cv::Rect m_cropRect;
+
+    Yolo11Ncnn m_yoloDetector;
 };
 
 #endif // WORKTHREAD_H

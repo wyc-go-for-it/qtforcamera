@@ -2,7 +2,6 @@
 
 ROIViewfinder::~ROIViewfinder()
 {
-    savePoints();
 }
 
 void ROIViewfinder::resizeEvent(QResizeEvent* event)
@@ -143,6 +142,8 @@ void ROIViewfinder::mouseReleaseEvent(QMouseEvent* event)
         m_isDraggingPolygon = false;
         m_draggedIndex = -1;
         unsetCursor();
+
+        savePoints();
     }
     QCameraViewfinder::mouseReleaseEvent(event);
 }

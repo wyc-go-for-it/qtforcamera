@@ -27,7 +27,7 @@ struct SearchResult {
     std::string name;
     std::string barcode;
     float similarity;
-    uint32_t recordIndex;
+    size_t recordIndex;
 };
 
 class ProductDatabase {

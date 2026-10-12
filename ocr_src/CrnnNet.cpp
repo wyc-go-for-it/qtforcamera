@@ -29,6 +29,8 @@ void CrnnNet::setNumThread(int numOfThread)
 
 bool CrnnNet::initModel(const std::string& pathStr, const std::string& keysPath)
 {
+    net.opt.num_threads = numThread;
+
     int ret_param = net.load_param((pathStr + ".param").c_str());
     int ret_bin = net.load_model((pathStr + ".bin").c_str());
     if (ret_param != 0 || ret_bin != 0) {

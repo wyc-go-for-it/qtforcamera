@@ -1,4 +1,5 @@
 #include "ImageUtils.h"
+#include "qdebug.h"
 
 QImage ImageUtils::matToQImage(const cv::Mat& mat, bool clone)
 {

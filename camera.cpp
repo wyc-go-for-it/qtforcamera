@@ -49,6 +49,8 @@
 ****************************************************************************/
 
 #include "camera.h"
+#include "CustomGLSurface.h"
+#include "glrendererwidget.h"
 #include "goodsdelegate.h"
 #include "goodsmodel.h"
 #include "imagesettings.h"
@@ -82,15 +84,39 @@ Camera::Camera()
 
     connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Camera::updateCaptureMode);
 
-    setCamera(QCameraInfo::defaultCamera());
+    {
+        QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
+        settings.beginGroup("camera");
+
+        auto description = settings.value("cameraInfo", QCameraInfo::defaultCamera().description()).toString();
+
+        QCameraInfo cameraInfo;
+
+        auto lst = QCameraInfo::availableCameras();
+        for (const auto& c : lst) {
+            if (c.description() == description) {
+                cameraInfo = c;
+                break;
+            }
+        }
+
+        if (cameraInfo.isNull()) {
+            cameraInfo = QCameraInfo ::defaultCamera();
+        }
+
+        setCamera(cameraInfo);
+
+        settings.endGroup();
+    }
 
     //
     connect(ui->takeBackgroundBtn, &QPushButton::clicked, this, &Camera::saveBackgroundImage);
     connect(ui->recognitionBtn, &QPushButton::clicked, this, [this]() {
         mWorkThread->onRecognition(true);
     });
-    connect(mWorkThread, &WorkThread::cropROIed, this, &Camera::showRecognition);
-    connect(mWorkThread, &WorkThread::error, this, [this](const QString& error) {
+
+    connect(mWorkThread.data(), &WorkThread::cropROIed, this, &Camera::showRecognition);
+    connect(mWorkThread.data(), &WorkThread::error, this, [this](const QString& error) {
         ui->statusbar->showMessage("WorkThread info:" + error);
     });
 
@@ -103,7 +129,7 @@ Camera::Camera()
         ui->name->clear();
     });
 
-    connect(ui->viewfinder, &ROIViewfinder::polygonChanged, mWorkThread, &WorkThread::onUpdateVertex);
+    connect(m_glWindow, &GLRendererWidget::polygonChanged, mWorkThread.data(), &WorkThread::onUpdateVertex);
 
     mWorkThread->init();
 
@@ -113,10 +139,6 @@ Camera::Camera()
 
 Camera::~Camera()
 {
-    if (mWorkThread != nullptr) {
-        delete mWorkThread;
-        mWorkThread = nullptr;
-    }
 }
 
 void Camera::initDir()
@@ -164,17 +186,28 @@ void Camera::initDevices()
 
 void Camera::setCamera(const QCameraInfo& cameraInfo)
 {
+    {
+        QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
+        settings.beginGroup("camera");
+        settings.setValue("cameraInfo", cameraInfo.description());
+        settings.endGroup();
+    }
+
     m_camera.reset(new QCamera(cameraInfo));
 
     auto* probe = new QVideoProbe(m_camera.data());
     if (probe->setSource(m_camera.data())) {
         probe->connect(probe, &QVideoProbe::videoFrameProbed, this, [this](const QVideoFrame& frame) {
             if (!isFirstFrame) {
+                qDebug() << "camera pixelFormat:" << m_camera->viewfinderSettings().pixelFormat();
+                qDebug() << "pixelFormat:" << m_camera->supportedViewfinderPixelFormats();
+
                 isFirstFrame = true;
-                ui->viewfinder->updateImageSize(frame.size());
+                m_glWindow->updateImageSize(frame.size());
             }
+
+            mWorkThread->onVideoFrameChanged(frame);
         });
-        probe->connect(probe, &QVideoProbe::videoFrameProbed, mWorkThread, &WorkThread::onVideoFrameChanged);
     }
 
     connect(m_camera.data(), &QCamera::stateChanged, this, &Camera::updateCameraState);
@@ -189,7 +222,26 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
 
     connect(ui->exposureCompensation, &QAbstractSlider::valueChanged, this, &Camera::setExposureCompensation);
 
-    m_camera->setViewfinder(ui->viewfinder);
+    {
+        m_glWindow = new GLRendererWidget();
+        m_glWindow->setRotation(cameraInfo.orientation());
+        m_glWindow->setMirrored(cameraInfo.position());
+
+        m_glSurface.reset(new CustomGLSurface());
+        m_glContainer.reset(QWidget::createWindowContainer(m_glWindow));
+
+        m_glContainer->setObjectName("m_glContainer");
+        m_glContainer->installEventFilter(this);
+        m_glContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        m_glContainer->setAttribute(Qt::WA_AcceptTouchEvents, true);
+
+        ui->viewfinderPage->layout()->addWidget(m_glContainer.data());
+
+        connect(m_glSurface.data(), &CustomGLSurface::frameAvailable, m_glWindow, &GLRendererWidget::updateFrame);
+        m_camera->setViewfinder(m_glSurface.data());
+
+        connect(mWorkThread.data(), &WorkThread::detected, m_glWindow, &GLRendererWidget::updateCurrentObjects, Qt::QueuedConnection);
+    }
 
     updateCameraState(m_camera->state());
     updateLockStatus(m_camera->lockStatus(), QCamera::UserRequest);
@@ -222,9 +274,6 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
     updateCaptureMode();
 
     m_camera->start();
-
-    qDebug() << "pixelFormat:" << m_camera->viewfinderSettings().pixelFormat();
-    qDebug() << "pixelFormat:" << ui->viewfinder->videoSurface()->supportedPixelFormats();
 }
 
 void Camera::keyPressEvent(QKeyEvent* event)
@@ -278,7 +327,7 @@ void Camera::processCapturedImage(int requestId, const QImage& img)
 {
     Q_UNUSED(requestId);
 
-    QImage scaledImage = img.scaled(ui->viewfinder->size(),
+    QImage scaledImage = img.scaled(m_glWindow->size(),
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation);
 
@@ -541,8 +590,12 @@ void Camera::imageSaved(int id, const QString& fileName)
         close();
 }
 
-void Camera::showRecognition(const QImage& diff, const QImage& undiff, const QImage& binary_diff)
+void Camera::showRecognition(const QImage& frame, const QImage& diff, const QImage& undiff, const QImage& binary_diff)
 {
+    ui->detected_frame->setPixmap(QPixmap::fromImage(frame.scaled(ui->detected_frame->size(),
+        Qt::KeepAspectRatio,
+        Qt::SmoothTransformation)));
+
     auto scaledDiff = diff.scaled(ui->diff_mat->size(),
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation);
@@ -593,7 +646,7 @@ void Camera::initRecogInfo()
         }
     });
 
-    connect(mWorkThread, &WorkThread::recogFinised, this, [model](const QList<RecogResult>& data) {
+    connect(mWorkThread.data(), &WorkThread::recogFinised, this, [model](const QList<RecogResult>& data) {
         model->clear();
         if (data.isEmpty()) {
             model->addRows({});
@@ -607,6 +660,29 @@ void Camera::initRecogInfo()
             model->addRows(copy);
         }
     });
+}
+
+bool Camera::eventFilter(QObject* obj, QEvent* e)
+{
+    if (obj->objectName() != "m_glContainer")
+        return QWidget::eventFilter(obj, e);
+
+    switch (e->type()) {
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseMove:
+    case QEvent::MouseButtonRelease: {
+        auto* me = static_cast<QMouseEvent*>(e);
+        QMouseEvent fwd(me->type(),
+            m_glWindow->mapFromGlobal(me->globalPos()),
+            me->globalPos(),
+            me->button(), me->buttons(), me->modifiers());
+        QCoreApplication::sendEvent(m_glWindow, &fwd);
+        return true;
+    }
+    default:
+        break;
+    }
+    return QWidget::eventFilter(obj, e);
 }
 
 void Camera::saveBackgroundImage()

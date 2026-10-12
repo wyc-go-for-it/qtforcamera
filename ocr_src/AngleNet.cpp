@@ -28,6 +28,8 @@ void AngleNet::setNumThread(int numOfThread)
 
 bool AngleNet::initModel(const std::string& pathStr)
 {
+    net.opt.num_threads = numThread;
+
     int ret_param = net.load_param((pathStr + ".param").c_str());
     int ret_bin = net.load_model((pathStr + ".bin").c_str());
     if (ret_param != 0 || ret_bin != 0) {
@@ -54,8 +56,9 @@ Angle scoreToAngle(const std::vector<float>& outputData)
 Angle AngleNet::getAngle(cv::Mat& src)
 {
     ncnn::Mat input = ncnn::Mat::from_pixels(
-        src.data, ncnn::Mat::PIXEL_RGB,
+        src.data, ncnn::Mat::PIXEL_BGR2RGB,
         src.cols, src.rows);
+
     input.substract_mean_normalize(meanValues, normValues);
     ncnn::Extractor extractor = net.create_extractor();
     extractor.input("input", input);

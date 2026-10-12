@@ -27,6 +27,25 @@ void DbNet::setNumThread(int numOfThread)
 
 bool DbNet::initModel(const std::string& pathStr)
 {
+    bool use_gpu = false;
+
+    net.opt.num_threads = numThread;
+    net.opt.use_vulkan_compute = use_gpu;
+
+    net.opt.use_fp16_packed = use_gpu;
+    net.opt.use_fp16_storage = use_gpu;
+    net.opt.use_fp16_arithmetic = use_gpu;
+
+    net.opt.blob_allocator = 0;
+    net.opt.workspace_allocator = 0;
+    net.opt.openmp_blocktime = 0;
+
+    net.opt.use_packing_layout = true;
+    net.opt.use_winograd_convolution = true;
+    net.opt.use_sgemm_convolution = true;
+
+    net.opt.lightmode = true;
+
     int dbParam = net.load_param((pathStr + ".param").c_str());
     int dbModel = net.load_model((pathStr + ".bin").c_str());
     if (dbParam != 0 || dbModel != 0) {

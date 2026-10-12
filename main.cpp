@@ -7,10 +7,13 @@
 #include <androidUtils/localandroidutils.h>
 #endif
 
-#pragma execution_character_set("utf-8")
-
 int main(int argc, char* argv[])
 {
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+#endif
 
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QCoreApplication::setAttribute(Qt::AA_NativeWindows);
@@ -19,6 +22,7 @@ int main(int argc, char* argv[])
 
     qRegisterMetaType<QVector<QPointF>>();
     qRegisterMetaType<QList<RecogResult>>();
+    qRegisterMetaType<QVector<DetectObject>>();
 
 #ifdef Q_OS_ANDROID
     if (!LocalAndroidUtils::checkAndRequestCameraPermission()) {

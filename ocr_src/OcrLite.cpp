@@ -1,5 +1,6 @@
 #include "OcrLite.h"
 #include "OcrUtils.h"
+#include "qdebug.h"
 #include <QElapsedTimer>
 #include <stdarg.h> //windows&linux
 
@@ -76,6 +77,9 @@ void OcrLite::Logger(const char* format, ...)
     }
     if (isOutputResultTxt)
         fprintf(resultTxt, "%s", buffer);
+
+    qDebug() << QString(buffer);
+
     free(buffer);
 }
 
@@ -107,6 +111,7 @@ OcrResult OcrLite::detect(const char* path, const char* imgName,
     cv::Rect paddingRect(padding, padding, originSrc.cols, originSrc.rows);
     cv::Mat paddingSrc = makePadding(originSrc, padding);
     ScaleParam scale = getScaleParam(paddingSrc, resize);
+
     OcrResult result;
     result = detect(path, imgName, paddingSrc, paddingRect, scale,
         boxScoreThresh, boxThresh, unClipRatio, doAngle, mostAngle);

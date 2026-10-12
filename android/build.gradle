@@ -89,7 +89,7 @@ android {
         targetSdkVersion = qTargetSdkVersion
 
         ndk{
-            abiFilters  'armeabi-v7a'
+            abiFilters  'arm64-v8a','armeabi-v7a'
         }
     }
 

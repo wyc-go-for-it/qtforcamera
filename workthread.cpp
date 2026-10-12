@@ -39,6 +39,8 @@ WorkThread::WorkThread(QObject* parent)
 
         initOcrModel();
 
+        initYoloModel();
+
         m_productDatabase.loadModel((modelDir() + "/data.bat").toStdString());
 
         loadBG();
@@ -69,19 +71,17 @@ void WorkThread::onVideoFrameChanged(const QVideoFrame& frame)
     if (!frame.isValid())
         return;
 
-    if (isStudied.loadRelaxed()) {
-        isStudied.storeRelaxed(0);
-        QVideoFrame tmp(frame);
-        auto data = cropVideoFrame(tmp);
+    QMutexLocker l(&m_lock);
+    if (m_frame_lst.size() < 3) {
+        m_frame_lst.append(frame);
+    } else {
+        m_frame_lst[0] = m_frame_lst[1];
+        m_frame_lst[1] = m_frame_lst[2];
+        m_frame_lst[2] = frame;
+    }
 
-        studied(data);
-    } else if (isRecognition.loadRelaxed()) {
-        isRecognition.storeRelaxed(0);
-
-        QVideoFrame tmp(frame);
-        auto data = cropVideoFrame(tmp);
-
-        recognition(data);
+    if (!m_hanlde_frame) {
+        QMetaObject::invokeMethod(this, "handleFrame", Qt::QueuedConnection);
     }
 }
 
@@ -128,7 +128,7 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
         2,
         cv::LINE_8);
 
-    emit cropROIed(ImageUtils::matToQImage(cropGoods), ImageUtils::matToQImage(copy_bg), ImageUtils::matToQImage(mask));
+    emit cropROIed(ImageUtils::matToQImage(cur_fg), ImageUtils::matToQImage(cropGoods), ImageUtils::matToQImage(copy_bg), ImageUtils::matToQImage(mask));
 
     QList<RecogResult> recogResult;
     if (cropGoods.empty()) {
@@ -175,12 +175,12 @@ QString WorkThread::modelDir()
     return tempDir;
 }
 
-QString WorkThread::ocrModelDir()
+QString WorkThread::ncnnModelDir()
 {
 #ifdef Q_OS_ANDROID
-    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation).append("/ocr_models");
+    QString tempDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation).append("/ncnn_models");
 #elif defined Q_OS_WIN
-    QString tempDir = QCoreApplication::applicationDirPath().append("/ocr_models");
+    QString tempDir = QCoreApplication::applicationDirPath().append("/ncnn_models");
 #endif
     return tempDir;
 }
@@ -189,7 +189,7 @@ void WorkThread::initDir()
 {
     QDir dir;
     dir.mkpath(modelDir());
-    dir.mkpath(ocrModelDir());
+    dir.mkpath(ncnnModelDir());
 }
 
 cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
@@ -206,7 +206,7 @@ cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
         int height = frame.height();
         int width = frame.width();
 
-        cv::Mat fullFrame = ImageUtils::qImageToMat(frame.image().mirrored());
+        cv::Mat fullFrame = ImageUtils::qImageToMat(frame.image());
 
         croppedMat = fullFrame(roi & cv::Rect(0, 0, width, height)).clone();
 
@@ -226,18 +226,19 @@ void WorkThread::loadBG()
 
 void WorkThread::initOcrModel()
 {
-    std::string detPath = ensureModelFile(":/models/models/ch_PP-OCRv3_det_infer_fp16", "det").toStdString();
-    std::string clsPath = ensureModelFile(":/models/models/ch_ppocr_mobile_v2.0_cls_infer_fp16", "cls").toStdString();
-    std::string recPath = ensureModelFile(":/models/models/ch_PP-OCRv3_rec_infer_fp16", "rec").toStdString();
-    std::string keysPath = ensureModelFile(":/models/models/ocr_keys_v1.txt", "keys.txt").toStdString();
+    std::string detPath = ensureModelFile(":/models/models/ch_PP-OCRv3_det_infer_fp16", "ocr_det").toStdString();
+    std::string clsPath = ensureModelFile(":/models/models/ch_ppocr_mobile_v2.0_cls_infer_fp16", "ocr_cls").toStdString();
+    std::string recPath = ensureModelFile(":/models/models/ch_PP-OCRv3_rec_infer_fp16", "ocr_rec").toStdString();
+    std::string keysPath = ensureModelFile(":/models/models/ocr_keys_v1.txt", "ocr_keys.txt").toStdString();
 
+    m_ocr.setNumThread(4);
     m_ocr.initLogger(true, false, false);
     m_ocr.initModels(detPath, clsPath, recPath, keysPath);
 }
 
 QString WorkThread::ensureModelFile(const QString& qrcPath, const QString& fileName)
 {
-    const auto targetPath = QDir(ocrModelDir()).filePath(fileName);
+    const auto targetPath = QDir(ncnnModelDir()).filePath(fileName);
 
     if (qrcPath.endsWith("txt")) {
         if (!QFile::exists(targetPath)) {
@@ -269,7 +270,7 @@ QString WorkThread::ensureModelFile(const QString& qrcPath, const QString& fileN
 std::string WorkThread::detectText(const cv::Mat& cur_fg)
 {
     int padding = 5; // 原 50 -> 缩减边缘 Padding 填充，减少无用像素计算
-    int maxSideLen = std::max(cur_fg.rows, cur_fg.cols); // 原 1024 -> 降低检测输入分辨率（核心！计算量减少近 60%）
+    int maxSideLen = 320; // 原 1024 -> 降低检测输入分辨率（核心！计算量减少近 60%）
     float boxScoreThresh = 0.80f; // 原 0.5f -> 提高框过滤阈值，少跑无用杂质框的 Rec 推理
     float boxThresh = 0.8f;
     float unClipRatio = 1.5f; // 原 1.6f -> 稍缩减文字框扩张比例
@@ -287,9 +288,86 @@ std::string WorkThread::detectText(const cv::Mat& cur_fg)
 
     auto txt = QString::fromStdString(clear);
 
-    qInfo() << "clean txt:" << QString::fromStdString(clear);
+    qInfo() << "clean txt:" << txt;
 
     return clear;
+}
+
+void WorkThread::initYoloModel()
+{
+    std::string path = ensureModelFile(":/models/models/yolo11n.ncnn", "yolo11n.ncnn").toStdString();
+
+    bool code = m_yoloDetector.load_model(path + ".param", path + ".bin", 320, false);
+    qDebug() << "initYoloModel:" << code;
+}
+
+void WorkThread::handleFrame()
+{
+    QMutexLocker l(&m_lock);
+    if (m_frame_lst.isEmpty())
+        return;
+
+    m_hanlde_frame = true;
+
+    auto data = cropVideoFrame(m_frame_lst.last());
+
+    l.unlock();
+
+    if (isStudied.loadRelaxed()) {
+        isStudied.storeRelaxed(0);
+
+        studied(data);
+    } else if (isRecognition.loadRelaxed()) {
+        isRecognition.storeRelaxed(0);
+
+        recognition(data);
+    } else {
+        cv::Mat frame = data;
+
+        if (data.channels() == 4)
+            cv::cvtColor(data, frame, cv::COLOR_BGRA2BGR);
+        else if (data.channels() == 1)
+            cv::cvtColor(data, frame, cv::COLOR_GRAY2BGR);
+
+        std::vector<Object> objects;
+
+        m_yoloDetector.detect(frame, objects, 0.85f, 0.45f);
+
+        // 绘制结果
+        // for (const auto& obj : objects) {
+        //     cv::rectangle(frame, obj.rect, cv::Scalar(0, 255, 0), 2);
+        //     std::string label_str = "Class " + std::to_string(obj.label) + ": " + cv::format("%.2f", obj.prob);
+        //     cv::putText(frame, label_str, cv::Point(obj.rect.x, obj.rect.y - 5),
+        //         cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+        // }
+
+        static const QStringList COCO_CLASSES = {
+            QStringLiteral("人"), QStringLiteral("自行车"), QStringLiteral("汽车"), QStringLiteral("摩托车"), QStringLiteral("飞机"), QStringLiteral("公交车"), QStringLiteral("火车"), QStringLiteral("卡车"), QStringLiteral("船"), QStringLiteral("红绿灯"),
+            QStringLiteral("消防栓"), QStringLiteral("停止标志"), QStringLiteral("停车计时器"), QStringLiteral("长椅"), QStringLiteral("鸟"), QStringLiteral("猫"), QStringLiteral("狗"), QStringLiteral("马"), QStringLiteral("羊"), QStringLiteral("牛"),
+            QStringLiteral("大象"), QStringLiteral("熊"), QStringLiteral("斑马"), QStringLiteral("长颈鹿"), QStringLiteral("背包"), QStringLiteral("雨伞"), QStringLiteral("手提包"), QStringLiteral("领带"), QStringLiteral("皮箱"), QStringLiteral("飞盘"),
+            QStringLiteral("滑雪板"), QStringLiteral("单板滑雪"), QStringLiteral("运动球"), QStringLiteral("风筝"), QStringLiteral("棒球棒"), QStringLiteral("棒球手套"), QStringLiteral("滑板"), QStringLiteral("冲浪板"), QStringLiteral("网球拍"), QStringLiteral("瓶子"),
+            QStringLiteral("高脚杯"), QStringLiteral("杯子"), QStringLiteral("叉子"), QStringLiteral("刀"), QStringLiteral("勺子"), QStringLiteral("碗"), QStringLiteral("香蕉"), QStringLiteral("苹果"), QStringLiteral("三明治"), QStringLiteral("橙子"),
+            QStringLiteral("西兰花"), QStringLiteral("胡萝卜"), QStringLiteral("热狗"), QStringLiteral("披萨"), QStringLiteral("甜甜圈"), QStringLiteral("蛋糕"), QStringLiteral("椅子"), QStringLiteral("沙发"), QStringLiteral("盆栽"), QStringLiteral("床"),
+            QStringLiteral("餐桌"), QStringLiteral("马桶"), QStringLiteral("电视"), QStringLiteral("笔记本"), QStringLiteral("鼠标"), QStringLiteral("遥控器"), QStringLiteral("键盘"), QStringLiteral("手机"), QStringLiteral("微波炉"), QStringLiteral("烤箱"),
+            QStringLiteral("面包机"), QStringLiteral("洗碗机"), QStringLiteral("冰箱"), QStringLiteral("书"), QStringLiteral("时钟"), QStringLiteral("花瓶"), QStringLiteral("剪刀"), QStringLiteral("泰迪熊"), QStringLiteral("吹风机"), QStringLiteral("牙刷")
+        };
+
+        QVector<DetectObject> detectObject;
+        detectObject.reserve(objects.size());
+
+        for (const auto& obj : objects) {
+
+            auto class_name = (obj.label >= 0 && obj.label < (int)COCO_CLASSES.size()) ? COCO_CLASSES[obj.label] : ("Class " + QString::number(obj.label));
+
+            auto label_str = class_name;
+
+            detectObject.append({ { obj.rect.x + m_cropRect.x, obj.rect.y + m_cropRect.y, obj.rect.width, obj.rect.height }, label_str, obj.prob });
+        }
+
+        emit detected(detectObject);
+    }
+
+    m_hanlde_frame = false;
 }
 
 void WorkThread::studied(const cv::Mat& cur_fg)
