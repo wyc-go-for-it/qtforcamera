@@ -42,6 +42,8 @@ public:
     static std::vector<float> fuseFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text, float wVisual = 0.80f, float wText = 0.20f);
 
 private:
+    ProductFeatureEngine();
+
     /**
      * @brief 5. 组合主函数：提取 VISUAL_DIM 维复合归一化特征向量
      */

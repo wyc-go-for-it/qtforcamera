@@ -35,6 +35,9 @@ set(HEADER
     customglsurface.h
     glrendererwidget.h
     yoloncnn.h
+    bboxu2netp.h
+    isnetsegmenter.h
+    litesaliencynet.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -56,6 +59,9 @@ set(SOURCES
     customglsurface.cpp
     glrendererwidget.cpp
     yoloncnn.cpp
+    bboxu2netp.cpp
+    isnetsegmenter.cpp
+    litesaliencynet.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -129,6 +135,7 @@ else()
             ${PROJECT_SOURCES}
             ${OCR_CORE_SRCS}
             ${RESOURCES}
+
         )
         set_target_properties(qtforcamera PROPERTIES
             QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
@@ -139,6 +146,8 @@ else()
             ${PROJECT_SOURCES}
             ${OCR_CORE_SRCS}
             ${RESOURCES}
+
+
         )
     endif()
 endif()
@@ -183,7 +192,7 @@ elseif(WIN32)
     target_link_libraries(qtforcamera PRIVATE ${OPENGL_LIB})
 endif()
 
-#link ocr
+#link ncnn
 target_link_libraries(qtforcamera PRIVATE ${NCNN_LIBS})
 if(WIN32)
     set(OCR_WIN_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/ncnn/win")
@@ -212,7 +221,7 @@ elseif(ANDROID)
         log
     )
 endif()
-#end link ocr
+#end link ncnn
 
 #link opencv
 set(OPENCV_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv2")
@@ -221,30 +230,34 @@ target_include_directories(qtforcamera PRIVATE "${OPENCV_DLL_DIR}/include")
 if(WIN32)
     set(OPENCV_WIN_DLL_DIR "${OPENCV_DLL_DIR}/win")
 
+    #搜出所有 .lib 文件
+    file(GLOB ALL_LIBS "${OPENCV_WIN_DLL_DIR}/lib/*.lib")
+
+    #从中过滤出 Debug 库（带 d.lib 结尾的）
+    set(OPENCV_DEBUG_LIBS ${ALL_LIBS})
+    list(FILTER OPENCV_DEBUG_LIBS INCLUDE REGEX ".*d\\.lib$")
+
+    #从中过滤出 Release 库（排除带 d.lib 结尾的）
+    set(OPENCV_RELEASE_LIBS ${ALL_LIBS})
+    list(FILTER OPENCV_RELEASE_LIBS EXCLUDE REGEX ".*d\\.lib$")
+
     target_link_libraries(qtforcamera PRIVATE
-        # Debug 模式链接
-        debug "${OPENCV_WIN_DLL_DIR}/lib/opencv_core455d.lib"
-        debug "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgcodecs455d.lib"
-        debug "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgproc455d.lib"
-
-        # Release / RelWithDebInfo 等模式链接
-        optimized "${OPENCV_WIN_DLL_DIR}/lib/opencv_core455.lib"
-        optimized "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgcodecs455.lib"
-        optimized "${OPENCV_WIN_DLL_DIR}/lib/opencv_imgproc455.lib"
+        $<$<CONFIG:Debug>:${OPENCV_DEBUG_LIBS}>
+        $<$<CONFIG:Release>:${OPENCV_RELEASE_LIBS}>
     )
 
-    # 3. 自动拷贝对应的 DLL 到输出目录
-    add_custom_command(TARGET qtforcamera POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_core455d.dll>
-            $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgcodecs455d.dll>
-            $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgproc455d.dll>
-            $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_core455.dll>
-            $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgcodecs455.dll>
-            $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgproc455.dll>
-            "$<TARGET_FILE_DIR:qtforcamera>"
-        COMMAND_EXPAND_LISTS
-    )
+    # #自动拷贝对应的 DLL 到输出目录
+    # add_custom_command(TARGET qtforcamera POST_BUILD
+    #     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    #         $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_core455d.dll>
+    #         $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgcodecs455d.dll>
+    #         $<$<CONFIG:Debug>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgproc455d.dll>
+    #         $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_core455.dll>
+    #         $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgcodecs455.dll>
+    #         $<$<NOT:$<CONFIG:Debug>>:${OPENCV_WIN_DLL_DIR}/bin/opencv_imgproc455.dll>
+    #         "$<TARGET_FILE_DIR:qtforcamera>"
+    #     COMMAND_EXPAND_LISTS
+    # )
 elseif(ANDROID)
     set(OPENCV_ANDROID_LIB_DIR "${OPENCV_DLL_DIR}/android")
 

@@ -1,0 +1,123 @@
+7767517
+121 139
+Input                    in0                      0 1 in0
+Convolution              conv_59                  1 1 in0 2 0=16 1=3 3=2 4=1 5=1 6=432 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdwrelu_0             1 1 2 3 0=16 1=3 3=2 4=1 5=1 6=144 7=16 9=1
+Split                    splitncnn_0              1 2 3 4 5
+Pooling                  gap_0                    1 1 5 6 0=1 4=1
+InnerProduct             fcrelu_0                 1 1 6 7 0=8 1=1 2=128 9=1
+InnerProduct             linear_92                1 1 7 8 0=16 1=1 2=128
+HardSigmoid              hsigmoid_9               1 1 8 9 0=1.666667e-01
+BinaryOp                 mul_0                    2 1 9 4 10 0=2
+Convolution              conv_60                  1 1 10 11 0=16 1=1 5=1 6=256
+Split                    splitncnn_1              1 2 11 12 13
+Convolution              convrelu_0               1 1 13 14 0=72 1=1 5=1 6=1152 9=1
+ConvolutionDepthWise     convdwrelu_1             1 1 14 15 0=72 1=3 3=2 4=1 5=1 6=648 7=72 9=1
+Convolution              conv_62                  1 1 15 16 0=24 1=1 5=1 6=1728
+Split                    splitncnn_2              1 2 16 17 18
+Convolution              convrelu_1               1 1 18 19 0=88 1=1 5=1 6=2112 9=1
+ConvolutionDepthWise     convdwrelu_2             1 1 19 20 0=88 1=3 4=1 5=1 6=792 7=88 9=1
+Convolution              conv_64                  1 1 20 21 0=24 1=1 5=1 6=2112
+BinaryOp                 add_1                    2 1 21 17 22
+Split                    splitncnn_3              1 2 22 23 24
+Convolution              conv_65                  1 1 24 26 0=96 1=1 5=1 6=2304 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_112               1 1 26 28 0=96 1=5 3=2 4=2 5=1 6=2400 7=96 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_4              1 2 28 29 30
+Pooling                  gap_1                    1 1 30 31 0=1 4=1
+InnerProduct             fcrelu_1                 1 1 31 32 0=24 1=1 2=2304 9=1
+InnerProduct             linear_94                1 1 32 33 0=96 1=1 2=2304
+HardSigmoid              hsigmoid_10              1 1 33 34 0=1.666667e-01
+BinaryOp                 mul_2                    2 1 34 29 35 0=2
+Convolution              conv_66                  1 1 35 36 0=40 1=1 5=1 6=3840
+Split                    splitncnn_5              1 2 36 37 38
+Convolution              conv_67                  1 1 38 40 0=240 1=1 5=1 6=9600 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_113               1 1 40 42 0=240 1=5 4=2 5=1 6=6000 7=240 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_6              1 2 42 43 44
+Pooling                  gap_2                    1 1 44 45 0=1 4=1
+InnerProduct             fcrelu_2                 1 1 45 46 0=64 1=1 2=15360 9=1
+InnerProduct             linear_96                1 1 46 47 0=240 1=1 2=15360
+HardSigmoid              hsigmoid_11              1 1 47 48 0=1.666667e-01
+BinaryOp                 mul_3                    2 1 48 43 49 0=2
+Convolution              conv_68                  1 1 49 50 0=40 1=1 5=1 6=9600
+BinaryOp                 add_4                    2 1 50 37 51
+Split                    splitncnn_7              1 2 51 52 53
+Convolution              conv_69                  1 1 53 55 0=240 1=1 5=1 6=9600 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_114               1 1 55 57 0=240 1=5 4=2 5=1 6=6000 7=240 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_8              1 2 57 58 59
+Pooling                  gap_3                    1 1 59 60 0=1 4=1
+InnerProduct             fcrelu_3                 1 1 60 61 0=64 1=1 2=15360 9=1
+InnerProduct             linear_98                1 1 61 62 0=240 1=1 2=15360
+HardSigmoid              hsigmoid_12              1 1 62 63 0=1.666667e-01
+BinaryOp                 mul_5                    2 1 63 58 64 0=2
+Convolution              conv_70                  1 1 64 65 0=40 1=1 5=1 6=9600
+BinaryOp                 add_6                    2 1 65 52 66
+Convolution              conv_71                  1 1 66 68 0=120 1=1 5=1 6=4800 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_115               1 1 68 70 0=120 1=5 4=2 5=1 6=3000 7=120 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_9              1 2 70 71 72
+Pooling                  gap_4                    1 1 72 73 0=1 4=1
+InnerProduct             fcrelu_4                 1 1 73 74 0=32 1=1 2=3840 9=1
+InnerProduct             linear_100               1 1 74 75 0=120 1=1 2=3840
+HardSigmoid              hsigmoid_13              1 1 75 76 0=1.666667e-01
+BinaryOp                 mul_7                    2 1 76 71 77 0=2
+Convolution              conv_72                  1 1 77 78 0=48 1=1 5=1 6=5760
+Split                    splitncnn_10             1 2 78 79 80
+Convolution              conv_73                  1 1 80 82 0=144 1=1 5=1 6=6912 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_116               1 1 82 84 0=144 1=5 4=2 5=1 6=3600 7=144 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_11             1 2 84 85 86
+Pooling                  gap_5                    1 1 86 87 0=1 4=1
+InnerProduct             fcrelu_5                 1 1 87 88 0=40 1=1 2=5760 9=1
+InnerProduct             linear_102               1 1 88 89 0=144 1=1 2=5760
+HardSigmoid              hsigmoid_14              1 1 89 90 0=1.666667e-01
+BinaryOp                 mul_8                    2 1 90 85 91 0=2
+Convolution              conv_74                  1 1 91 92 0=48 1=1 5=1 6=6912
+BinaryOp                 add_9                    2 1 92 79 93
+Split                    splitncnn_12             1 2 93 94 95
+Convolution              conv_75                  1 1 95 97 0=288 1=1 5=1 6=13824 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_117               1 1 97 99 0=288 1=5 3=2 4=2 5=1 6=7200 7=288 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_13             1 2 99 100 101
+Pooling                  gap_6                    1 1 101 102 0=1 4=1
+InnerProduct             fcrelu_6                 1 1 102 103 0=72 1=1 2=20736 9=1
+InnerProduct             linear_104               1 1 103 104 0=288 1=1 2=20736
+HardSigmoid              hsigmoid_15              1 1 104 105 0=1.666667e-01
+BinaryOp                 mul_10                   2 1 105 100 106 0=2
+Convolution              conv_76                  1 1 106 107 0=96 1=1 5=1 6=27648
+Split                    splitncnn_14             1 2 107 108 109
+Convolution              conv_77                  1 1 109 111 0=576 1=1 5=1 6=55296 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_118               1 1 111 113 0=576 1=5 4=2 5=1 6=14400 7=576 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_15             1 2 113 114 115
+Pooling                  gap_7                    1 1 115 116 0=1 4=1
+InnerProduct             fcrelu_7                 1 1 116 117 0=144 1=1 2=82944 9=1
+InnerProduct             linear_106               1 1 117 118 0=576 1=1 2=82944
+HardSigmoid              hsigmoid_16              1 1 118 119 0=1.666667e-01
+BinaryOp                 mul_11                   2 1 119 114 120 0=2
+Convolution              conv_78                  1 1 120 121 0=96 1=1 5=1 6=55296
+BinaryOp                 add_12                   2 1 121 108 122
+Split                    splitncnn_16             1 2 122 123 124
+Convolution              conv_79                  1 1 124 126 0=576 1=1 5=1 6=55296 9=6 -23310=2,1.666667e-01,5.000000e-01
+ConvolutionDepthWise     convdw_119               1 1 126 128 0=576 1=5 4=2 5=1 6=14400 7=576 9=6 -23310=2,1.666667e-01,5.000000e-01
+Split                    splitncnn_17             1 2 128 129 130
+Pooling                  gap_8                    1 1 130 131 0=1 4=1
+InnerProduct             fcrelu_8                 1 1 131 132 0=144 1=1 2=82944 9=1
+InnerProduct             linear_108               1 1 132 133 0=576 1=1 2=82944
+HardSigmoid              hsigmoid_17              1 1 133 134 0=1.666667e-01
+BinaryOp                 mul_13                   2 1 134 129 135 0=2
+Convolution              conv_80                  1 1 135 136 0=96 1=1 5=1 6=55296
+BinaryOp                 add_14                   2 1 136 123 137
+Convolution              conv_81                  1 1 137 139 0=576 1=1 5=1 6=55296 9=6 -23310=2,1.666667e-01,5.000000e-01
+Convolution              conv_82                  1 1 12 140 0=32 1=1 5=1 6=512
+Convolution              conv_83                  1 1 23 141 0=32 1=1 5=1 6=768
+Convolution              conv_84                  1 1 94 142 0=32 1=1 5=1 6=1536
+Convolution              conv_85                  1 1 139 143 0=32 1=1 5=1 6=18432
+Interp                   interpolate_36           1 1 143 144 0=2 3=20 4=20
+BinaryOp                 add_15                   2 1 142 144 145
+Convolution              convrelu_2               1 1 145 146 0=32 1=3 4=1 5=1 6=9216 9=1
+Interp                   interpolate_37           1 1 146 147 0=2 3=40 4=40
+BinaryOp                 add_16                   2 1 141 147 148
+Convolution              convrelu_3               1 1 148 149 0=32 1=3 4=1 5=1 6=9216 9=1
+Interp                   interpolate_38           1 1 149 150 0=2 3=80 4=80
+BinaryOp                 add_17                   2 1 140 150 151
+Convolution              convrelu_4               1 1 151 152 0=32 1=3 4=1 5=1 6=9216 9=1
+Convolution              convrelu_5               1 1 152 153 0=16 1=3 4=1 5=1 6=4608 9=1
+Convolution              conv_90                  1 1 153 154 0=1 1=1 5=1 6=16
+Interp                   interpolate_39           1 1 154 155 0=2 3=320 4=320
+Sigmoid                  sigmoid_58               1 1 155 out0

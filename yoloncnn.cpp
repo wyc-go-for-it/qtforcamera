@@ -1,7 +1,23 @@
 #include "yoloncnn.h"
 #include "ncnn/cpu.h"
-#if defined(__ANDROID__)
+
+#ifdef __ANDROID__
 #include <android/log.h>
+#define LOG_TAG "Yolo11Ncnn"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#else
+#include <cstdio>
+#define LOGI(...)                 \
+    do {                          \
+        std::printf(__VA_ARGS__); \
+        fflush(stdout);           \
+    } while (0)
+#define LOGE(...)                          \
+    do {                                   \
+        std::fprintf(stderr, __VA_ARGS__); \
+        fflush(stdout);                    \
+    } while (0)
 #endif
 
 Yolo11Ncnn::Yolo11Ncnn()
@@ -31,7 +47,7 @@ bool Yolo11Ncnn::load_model(const std::string& param_path,
     net.opt.use_fp16_storage = true;
     net.opt.use_fp16_arithmetic = true;
 #else
-    net.opt.num_threads = 4;
+    net.opt.num_threads = 2;
     net.opt.use_fp16_packed = false;
     net.opt.use_fp16_storage = false;
     net.opt.use_fp16_arithmetic = false;
@@ -53,6 +69,8 @@ bool Yolo11Ncnn::load_model(const std::string& param_path,
         return false;
 
     is_loaded = true;
+
+    LOGI("Yolo11Ncnn model loaded from file");
 
     return true;
 }
@@ -257,20 +275,10 @@ bool Yolo11Ncnn::detect_modelA(const cv::Mat& bgr, std::vector<Object>& objects,
     double time_post = std::chrono::duration<double, std::milli>(t3 - t2).count();
     double time_total = std::chrono::duration<double, std::milli>(t3 - t0).count();
 
-#if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "qtforcamera", "in_mat: %d x %d x %d ,out.h: %d ,out.w: %d,num_classes:%d\n", in_mat.w, in_mat.h, in_mat.c, out.h, out.w, num_classes);
+    LOGI("in_mat: %d x %d x %d ,out.h: %d ,out.w: %d,num_classes:%d\n", in_mat.w, in_mat.h, in_mat.c, out.h, out.w, num_classes);
 
-    __android_log_print(ANDROID_LOG_INFO, "qtforcamera",
-        "【耗时分析】预处理: %.2f ms | 推理: %.2f ms | 后处理: %.2f ms | 总计: %.2f ms",
+    LOGI("【耗时分析】预处理: %.2f ms | 推理: %.2f ms | 后处理: %.2f ms | 总计: %.2f ms\n",
         time_prep, time_infer, time_post, time_total);
-#else
-    fprintf(stderr, "in_mat: %d x %d x %d ,out.h: %d ,out.w: %d,num_classes:%d\n", in_mat.w, in_mat.h, in_mat.c, out.h, out.w, num_classes);
-
-    printf("【耗时分析】预处理: %.2f ms | 推理: %.2f ms | 后处理: %.2f ms | 总计: %.2f ms\n",
-        time_prep, time_infer, time_post, time_total);
-
-    fflush(stdout);
-#endif
 
     return true;
 }
@@ -319,15 +327,16 @@ bool Yolo11Ncnn::detect_modelB(const cv::Mat& bgr, std::vector<Object>& objects,
 
     for (int j = 0; j < num_anchors; j++) {
         // 找最大类别分数（网络里已经 Sigmoid，不要再做）
-        int label = -1;
-        float score = 0.0f;
-        for (int c = 0; c < num_classes; c++) {
-            float s = rows[4 + c][j];
-            if (s > score) {
-                score = s;
-                label = c;
-            }
-        }
+        int label = 0;
+        float score = rows[4 + 0][j];
+
+        // for (int c = 0; c < num_classes; c++) {
+        //     float s = rows[4 + c][j];
+        //     if (s > score) {
+        //         score = s;
+        //         label = c;
+        //     }
+        // }
 
         if (score < conf_thresh)
             continue;
@@ -378,20 +387,10 @@ bool Yolo11Ncnn::detect_modelB(const cv::Mat& bgr, std::vector<Object>& objects,
     double time_post = std::chrono::duration<double, std::milli>(t3 - t2).count();
     double time_total = std::chrono::duration<double, std::milli>(t3 - t0).count();
 
-#if defined(__ANDROID__)
-    __android_log_print(ANDROID_LOG_INFO, "qtforcamera", "in_mat: %d x %d x %d ,out.h: %d ,out.w: %d,num_classes:%d\n", in_mat.w, in_mat.h, in_mat.c, out.h, out.w, num_classes);
+    LOGI("in_mat: %d x %d x %d ,out.h: %d ,out.w: %d,num_classes:%d\n", in_mat.w, in_mat.h, in_mat.c, out.h, out.w, num_classes);
 
-    __android_log_print(ANDROID_LOG_INFO, "qtforcamera",
-        "【耗时分析】预处理: %.2f ms | 推理: %.2f ms | 后处理: %.2f ms | 总计: %.2f ms",
+    LOGI("【耗时分析】预处理: %.2f ms | 推理: %.2f ms | 后处理: %.2f ms | 总计: %.2f ms\n",
         time_prep, time_infer, time_post, time_total);
-#else
-    fprintf(stderr, "in_mat: %d x %d x %d ,out.h: %d ,out.w: %d,num_classes:%d\n", in_mat.w, in_mat.h, in_mat.c, out.h, out.w, num_classes);
-
-    printf("【耗时分析】预处理: %.2f ms | 推理: %.2f ms | 后处理: %.2f ms | 总计: %.2f ms\n",
-        time_prep, time_infer, time_post, time_total);
-
-    fflush(stdout);
-#endif
 
     return true;
 }

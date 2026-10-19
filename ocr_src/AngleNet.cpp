@@ -1,5 +1,6 @@
 #include "AngleNet.h"
 #include "OcrUtils.h"
+#include "ncnn/cpu.h"
 #include <numeric>
 
 void AngleNet::setGpuIndex(int gpuIndex)
@@ -29,6 +30,29 @@ void AngleNet::setNumThread(int numOfThread)
 bool AngleNet::initModel(const std::string& pathStr)
 {
     net.opt.num_threads = numThread;
+
+#if defined(__ANDROID__)
+    net.opt.use_vulkan_compute = true;
+    net.opt.num_threads = ncnn::get_big_cpu_count();
+
+    net.opt.use_fp16_packed = true;
+    net.opt.use_fp16_storage = true;
+    net.opt.use_fp16_arithmetic = true;
+#else
+    net.opt.num_threads = 4;
+    net.opt.use_fp16_packed = false;
+    net.opt.use_fp16_storage = false;
+    net.opt.use_fp16_arithmetic = false;
+#endif
+    net.opt.blob_allocator = 0;
+    net.opt.workspace_allocator = 0;
+    net.opt.openmp_blocktime = 0;
+
+    net.opt.use_packing_layout = true;
+    net.opt.use_winograd_convolution = true;
+    net.opt.use_sgemm_convolution = true;
+
+    net.opt.lightmode = true;
 
     int ret_param = net.load_param((pathStr + ".param").c_str());
     int ret_bin = net.load_model((pathStr + ".bin").c_str());

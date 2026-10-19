@@ -153,6 +153,19 @@ void GLRendererWidget::updateFrame(const QVideoFrame& frame)
     update();
 }
 
+void GLRendererWidget::updateImageSize(const QSize& size)
+{
+    m_actualImageSize = size;
+
+    if (m_rotationAngle == 90 || m_rotationAngle == 270) {
+        m_actualImageSize.transpose();
+    }
+
+    initDefaultPoints();
+
+    emit polygonChanged(calOriginalPoints(), m_mirrored, m_rotationAngle);
+}
+
 void GLRendererWidget::updateCurrentObjects(const QVector<DetectObject>& objects)
 {
     QMutexLocker l(&mlock);
@@ -234,13 +247,14 @@ void GLRendererWidget::initializeGL()
 
     // 线框片段着色器 (Line Fragment Shader)
 
-    const char* lineFragmentShaderSource = R"(
-    precision mediump float;
-    uniform vec4 uColor;
-    void main() {
-        gl_FragColor = uColor; // 自定义框的颜色，如红色 vec4(1.0, 0.0, 0.0, 1.0)
-    }
-)";
+    const char* lineFragmentShaderSource =
+#ifdef Q_OS_ANDROID
+        "precision mediump float;\n"
+#endif
+        "uniform vec4 uColor;"
+        "void main() {"
+        "gl_FragColor = uColor;"
+        "}";
 
     initShader(m_programNV21, vsrc, fsrcNV21);
     m_programNV21.bind();
@@ -448,11 +462,16 @@ void GLRendererWidget::resizeEvent(QResizeEvent* event)
     QSize oldSize = event->oldSize();
     QSize newSize = event->size();
 
-    if (oldSize.width() <= 0 || oldSize.height() <= 0 || m_points.isEmpty()) {
+    if (oldSize.width() <= 0 || oldSize.height() <= 0) {
         initDefaultPoints();
         return;
     }
 
+    if (m_points.isEmpty()) {
+        initDefaultPoints();
+    }
+
+#ifdef Q_OS_WIND
     double scaleX = static_cast<double>(newSize.width()) / oldSize.width();
     double scaleY = static_cast<double>(newSize.height()) / oldSize.height();
 
@@ -460,6 +479,7 @@ void GLRendererWidget::resizeEvent(QResizeEvent* event)
         m_points[i].setX(m_points[i].x() * scaleX);
         m_points[i].setY(m_points[i].y() * scaleY);
     }
+#endif
 
     update();
 }
@@ -491,7 +511,7 @@ void GLRendererWidget::mouseMoveEvent(QMouseEvent* event)
         m_points[m_draggedIndex] = pos;
         update();
 
-        emit polygonChanged(calOriginalPoints());
+        emit polygonChanged(calOriginalPoints(), m_mirrored, m_rotationAngle);
     } else if (m_isDraggingPolygon) {
         QPointF delta = event->pos() - m_lastMousePos;
         bool canMove = true;
@@ -509,7 +529,7 @@ void GLRendererWidget::mouseMoveEvent(QMouseEvent* event)
             m_lastMousePos = event->pos();
             update();
 
-            emit polygonChanged(calOriginalPoints());
+            emit polygonChanged(calOriginalPoints(), m_mirrored, m_rotationAngle);
         }
     }
 

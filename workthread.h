@@ -2,11 +2,15 @@
 #define WORKTHREAD_H
 
 #include "OcrLite.h"
+#include "bboxu2netp.h"
+#include "litesaliencynet.h"
 #include "productdatabase.h"
 #include "producttextcleaner.h"
 #include "qthread.h"
 #include "yoloncnn.h"
 
+#include <ISNetSegmenter.h>
+#include <QCamera>
 #include <QMutex>
 #include <QVideoFrame>
 
@@ -42,7 +46,7 @@ public:
 public slots:
     void onVideoFrameChanged(const QVideoFrame& frame);
     void onRecognition(bool recog);
-    void onUpdateVertex(const QVector<QPointF>& points);
+    void onUpdateVertex(QVector<QPointF> points, QCamera::Position pos, qint32 rotationAngle);
 
 signals:
     void cropROIed(const QImage& frame, const QImage& diff, const QImage& undiff, const QImage& binary_diff);
@@ -69,6 +73,12 @@ private:
 
     Q_INVOKABLE void handleFrame();
 
+    void initU2netpModel();
+
+    void initISNetModel();
+
+    void initLiteSaliencyNetModel();
+
 private:
     QThread m_thread;
     QAtomicInt isRecognition, isStudied;
@@ -82,10 +92,19 @@ private:
     OcrLite m_ocr;
     ProductTextCleaner m_textCleaner;
 
-    QVector<QPointF> m_cropPoints; // 0:左上, 1:右上, 2:右下, 3:左下
+    QVector<QPointF> m_cropPoints;
     cv::Rect m_cropRect;
 
     Yolo11Ncnn m_yoloDetector;
+
+    QCamera::Position m_mirrored = QCamera::UnspecifiedPosition;
+    int m_rotationAngle = 0;
+
+    BboxU2netp m_u2netp;
+
+    ISNetSegmenter m_ISNetSegmenter;
+
+    LiteSaliencyNet m_LiteSaliencyNet;
 };
 
 #endif // WORKTHREAD_H

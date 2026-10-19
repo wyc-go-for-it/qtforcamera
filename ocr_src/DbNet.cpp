@@ -1,5 +1,6 @@
 #include "DbNet.h"
 #include "OcrUtils.h"
+#include "ncnn/cpu.h"
 
 void DbNet::setGpuIndex(int gpuIndex)
 {
@@ -27,15 +28,23 @@ void DbNet::setNumThread(int numOfThread)
 
 bool DbNet::initModel(const std::string& pathStr)
 {
-    bool use_gpu = false;
+    bool use_gpu = true;
 
     net.opt.num_threads = numThread;
-    net.opt.use_vulkan_compute = use_gpu;
 
-    net.opt.use_fp16_packed = use_gpu;
-    net.opt.use_fp16_storage = use_gpu;
-    net.opt.use_fp16_arithmetic = use_gpu;
+#if defined(__ANDROID__)
+    net.opt.use_vulkan_compute = true;
+    net.opt.num_threads = ncnn::get_big_cpu_count();
 
+    net.opt.use_fp16_packed = true;
+    net.opt.use_fp16_storage = true;
+    net.opt.use_fp16_arithmetic = true;
+#else
+    net.opt.num_threads = 4;
+    net.opt.use_fp16_packed = false;
+    net.opt.use_fp16_storage = false;
+    net.opt.use_fp16_arithmetic = false;
+#endif
     net.opt.blob_allocator = 0;
     net.opt.workspace_allocator = 0;
     net.opt.openmp_blocktime = 0;

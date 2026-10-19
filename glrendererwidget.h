@@ -91,16 +91,12 @@ public:
 
 public slots:
     void updateFrame(const QVideoFrame& frame);
-    inline void updateImageSize(const QSize& size)
-    {
-        m_actualImageSize = size;
-        emit polygonChanged(calOriginalPoints());
-    }
+    void updateImageSize(const QSize& size);
 
     void updateCurrentObjects(const QVector<DetectObject>& objects);
 
 signals:
-    void polygonChanged(const QVector<QPointF>& points);
+    void polygonChanged(QVector<QPointF>, QCamera::Position, qint32 rotationAngle);
 
 protected:
     void initializeGL() override;

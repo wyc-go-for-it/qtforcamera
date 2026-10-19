@@ -199,8 +199,10 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
     if (probe->setSource(m_camera.data())) {
         probe->connect(probe, &QVideoProbe::videoFrameProbed, this, [this](const QVideoFrame& frame) {
             if (!isFirstFrame) {
-                qDebug() << "camera pixelFormat:" << m_camera->viewfinderSettings().pixelFormat();
-                qDebug() << "pixelFormat:" << m_camera->supportedViewfinderPixelFormats();
+                qDebug() << "viewfinderSettings Formats:" << m_camera->viewfinderSettings().pixelFormat();
+                qDebug() << "supportedViewfinderPixelFormats:" << m_camera->supportedViewfinderPixelFormats();
+                qDebug() << "QVideoFrame Formats:" << frame.pixelFormat();
+                qDebug() << "QVideoFrame size:" << frame.size();
 
                 isFirstFrame = true;
                 m_glWindow->updateImageSize(frame.size());
@@ -224,8 +226,9 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
 
     {
         m_glWindow = new GLRendererWidget();
-        m_glWindow->setRotation(cameraInfo.orientation());
+
         m_glWindow->setMirrored(cameraInfo.position());
+        m_glWindow->setRotation(cameraInfo.orientation());
 
         m_glSurface.reset(new CustomGLSurface());
         m_glContainer.reset(QWidget::createWindowContainer(m_glWindow));
@@ -234,10 +237,11 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
         m_glContainer->installEventFilter(this);
         m_glContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         m_glContainer->setAttribute(Qt::WA_AcceptTouchEvents, true);
-
+        ui->viewfinderPage->layout()->setMargin(0);
         ui->viewfinderPage->layout()->addWidget(m_glContainer.data());
 
         connect(m_glSurface.data(), &CustomGLSurface::frameAvailable, m_glWindow, &GLRendererWidget::updateFrame);
+
         m_camera->setViewfinder(m_glSurface.data());
 
         connect(mWorkThread.data(), &WorkThread::detected, m_glWindow, &GLRendererWidget::updateCurrentObjects, Qt::QueuedConnection);
@@ -257,6 +261,8 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
 
         QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
         settings.beginGroup("camera");
+
+        qDebug() << "resolution:" << settings.value("resolution");
 
         m_imageSettings.setResolution(settings.value("resolution", QSize(640, 480)).toSize());
 

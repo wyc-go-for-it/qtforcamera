@@ -1,6 +1,7 @@
 #include "workthread.h"
 #include "camera.h"
 #include "imageUtils.h"
+#include "ncnn/cpu.h"
 #include "opencv2/imgcodecs.hpp"
 #include "productfeatureengine.h"
 #include "qdebug.h"
@@ -40,6 +41,10 @@ WorkThread::WorkThread(QObject* parent)
         initOcrModel();
 
         initYoloModel();
+
+        initU2netpModel();
+
+        initLiteSaliencyNetModel();
 
         m_productDatabase.loadModel((modelDir() + "/data.bat").toStdString());
 
@@ -90,13 +95,17 @@ void WorkThread::onRecognition(bool recog)
     isRecognition.storeRelaxed(recog);
 }
 
-void WorkThread::onUpdateVertex(const QVector<QPointF>& points)
+void WorkThread::onUpdateVertex(QVector<QPointF> points, QCamera::Position pos, qint32 rotationAngle)
 {
+
+    m_rotationAngle = rotationAngle;
+    m_mirrored = pos;
+
     m_cropPoints.clear();
     m_cropPoints.append(points);
 
     std::vector<cv::Point> pts;
-    pts.reserve(m_cropPoints.size());
+    pts.reserve(points.size());
     for (const QPointF& pt : qAsConst(m_cropPoints)) {
         pts.emplace_back(qRound(pt.x()), qRound(pt.y()));
     }
@@ -116,10 +125,18 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
         return;
     }
 
-    cv::Mat cropBg = m_bg(m_cropRect & cv::Rect(0, 0, m_bg.cols, m_bg.rows));
-
+    QElapsedTimer t;
+    t.start();
     // 2. 自动抠图获得纯净 ROI
-    auto [cropGoods, mask] = ProductFeatureEngine::cropROI(cropBg, cur_fg);
+
+    /*
+    cv::Mat cropBg = m_bg(m_cropRect & cv::Rect(0, 0, m_bg.cols, m_bg.rows));
+    auto [cropGoods, mask] = ProductFeatureEngine::cropROI(cropBg, cur_fg);*/
+
+    // auto [cropGoods, mask] = m_u2netp.u2netpCropROI(cur_fg);
+    auto [cropGoods, mask] = m_LiteSaliencyNet.liteSaliencyCropROI(cur_fg);
+
+    qDebug() << "CropROI:" << t.elapsed();
 
     cv::Mat copy_bg = m_bg.clone();
     cv::rectangle(copy_bg,
@@ -206,11 +223,38 @@ cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
         int height = frame.height();
         int width = frame.width();
 
-        cv::Mat fullFrame = ImageUtils::qImageToMat(frame.image());
-
-        croppedMat = fullFrame(roi & cv::Rect(0, 0, width, height)).clone();
+        auto real = frame.image();
 
         frame.unmap();
+
+        if (m_mirrored == QCamera::FrontFace) {
+            real = real.mirrored();
+        }
+
+        cv::Mat fullFrame = ImageUtils::qImageToMat(real);
+
+        cv::Mat rotationFrame;
+
+        auto rotaition = ((m_rotationAngle % 360) + 360) % 360;
+
+        switch (rotaition) {
+        case 90:
+            cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_90_COUNTERCLOCKWISE);
+            std::swap(width, height);
+            break;
+        case 180:
+            cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_180);
+            break;
+        case 270:
+            cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_90_CLOCKWISE);
+            std::swap(width, height);
+            break;
+        default:
+            rotationFrame = fullFrame;
+            break;
+        }
+
+        croppedMat = rotationFrame(roi & cv::Rect(0, 0, width, height)).clone();
     }
 
     return croppedMat;
@@ -297,8 +341,7 @@ void WorkThread::initYoloModel()
 {
     std::string path = ensureModelFile(":/models/models/yolo11n.ncnn", "yolo11n.ncnn").toStdString();
 
-    bool code = m_yoloDetector.load_model(path + ".param", path + ".bin", 320, false);
-    qDebug() << "initYoloModel:" << code;
+    m_yoloDetector.load_model(path + ".param", path + ".bin", 320, false);
 }
 
 void WorkThread::handleFrame()
@@ -313,61 +356,115 @@ void WorkThread::handleFrame()
 
     l.unlock();
 
-    if (isStudied.loadRelaxed()) {
-        isStudied.storeRelaxed(0);
+    if (!data.empty()) {
 
-        studied(data);
-    } else if (isRecognition.loadRelaxed()) {
-        isRecognition.storeRelaxed(0);
+        if (isStudied.loadRelaxed()) {
+            isStudied.storeRelaxed(0);
 
-        recognition(data);
-    } else {
-        cv::Mat frame = data;
+            studied(data);
+        } else if (isRecognition.loadRelaxed()) {
+            isRecognition.storeRelaxed(0);
 
-        if (data.channels() == 4)
-            cv::cvtColor(data, frame, cv::COLOR_BGRA2BGR);
-        else if (data.channels() == 1)
-            cv::cvtColor(data, frame, cv::COLOR_GRAY2BGR);
+            recognition(data);
+        } else {
 
-        std::vector<Object> objects;
+            cv::Mat frame = data;
 
-        m_yoloDetector.detect(frame, objects, 0.85f, 0.45f);
+            if (data.channels() == 4)
+                cv::cvtColor(data, frame, cv::COLOR_BGRA2BGR);
+            else if (data.channels() == 1)
+                cv::cvtColor(data, frame, cv::COLOR_GRAY2BGR);
 
-        // 绘制结果
-        // for (const auto& obj : objects) {
-        //     cv::rectangle(frame, obj.rect, cv::Scalar(0, 255, 0), 2);
-        //     std::string label_str = "Class " + std::to_string(obj.label) + ": " + cv::format("%.2f", obj.prob);
-        //     cv::putText(frame, label_str, cv::Point(obj.rect.x, obj.rect.y - 5),
-        //         cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
-        // }
+            std::vector<Object> objects;
 
-        static const QStringList COCO_CLASSES = {
-            QStringLiteral("人"), QStringLiteral("自行车"), QStringLiteral("汽车"), QStringLiteral("摩托车"), QStringLiteral("飞机"), QStringLiteral("公交车"), QStringLiteral("火车"), QStringLiteral("卡车"), QStringLiteral("船"), QStringLiteral("红绿灯"),
-            QStringLiteral("消防栓"), QStringLiteral("停止标志"), QStringLiteral("停车计时器"), QStringLiteral("长椅"), QStringLiteral("鸟"), QStringLiteral("猫"), QStringLiteral("狗"), QStringLiteral("马"), QStringLiteral("羊"), QStringLiteral("牛"),
-            QStringLiteral("大象"), QStringLiteral("熊"), QStringLiteral("斑马"), QStringLiteral("长颈鹿"), QStringLiteral("背包"), QStringLiteral("雨伞"), QStringLiteral("手提包"), QStringLiteral("领带"), QStringLiteral("皮箱"), QStringLiteral("飞盘"),
-            QStringLiteral("滑雪板"), QStringLiteral("单板滑雪"), QStringLiteral("运动球"), QStringLiteral("风筝"), QStringLiteral("棒球棒"), QStringLiteral("棒球手套"), QStringLiteral("滑板"), QStringLiteral("冲浪板"), QStringLiteral("网球拍"), QStringLiteral("瓶子"),
-            QStringLiteral("高脚杯"), QStringLiteral("杯子"), QStringLiteral("叉子"), QStringLiteral("刀"), QStringLiteral("勺子"), QStringLiteral("碗"), QStringLiteral("香蕉"), QStringLiteral("苹果"), QStringLiteral("三明治"), QStringLiteral("橙子"),
-            QStringLiteral("西兰花"), QStringLiteral("胡萝卜"), QStringLiteral("热狗"), QStringLiteral("披萨"), QStringLiteral("甜甜圈"), QStringLiteral("蛋糕"), QStringLiteral("椅子"), QStringLiteral("沙发"), QStringLiteral("盆栽"), QStringLiteral("床"),
-            QStringLiteral("餐桌"), QStringLiteral("马桶"), QStringLiteral("电视"), QStringLiteral("笔记本"), QStringLiteral("鼠标"), QStringLiteral("遥控器"), QStringLiteral("键盘"), QStringLiteral("手机"), QStringLiteral("微波炉"), QStringLiteral("烤箱"),
-            QStringLiteral("面包机"), QStringLiteral("洗碗机"), QStringLiteral("冰箱"), QStringLiteral("书"), QStringLiteral("时钟"), QStringLiteral("花瓶"), QStringLiteral("剪刀"), QStringLiteral("泰迪熊"), QStringLiteral("吹风机"), QStringLiteral("牙刷")
-        };
+            m_yoloDetector.detect(frame, objects, 0.5f, 0.45f);
 
-        QVector<DetectObject> detectObject;
-        detectObject.reserve(objects.size());
+            for (const auto& det : objects) {
+                if (det.label == 0 && det.prob > 0.5) {
+                    qDebug() << "detect hand:"
+                             << "true"
+                             << " label : " << det.label << " prob:" << det.prob;
+                }
+            }
+            // 绘制结果
+            // for (const auto& obj : objects) {
+            //     cv::rectangle(frame, obj.rect, cv::Scalar(0, 255, 0), 2);
+            //     std::string label_str = "Class " + std::to_string(obj.label) + ": " + cv::format("%.2f", obj.prob);
+            //     cv::putText(frame, label_str, cv::Point(obj.rect.x, obj.rect.y - 5),
+            //         cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 1);
+            // }
 
-        for (const auto& obj : objects) {
+            static const QStringList COCO_CLASSES = {
+                QStringLiteral("人"), QStringLiteral("自行车"), QStringLiteral("汽车"), QStringLiteral("摩托车"), QStringLiteral("飞机"), QStringLiteral("公交车"), QStringLiteral("火车"), QStringLiteral("卡车"), QStringLiteral("船"), QStringLiteral("红绿灯"),
+                QStringLiteral("消防栓"), QStringLiteral("停止标志"), QStringLiteral("停车计时器"), QStringLiteral("长椅"), QStringLiteral("鸟"), QStringLiteral("猫"), QStringLiteral("狗"), QStringLiteral("马"), QStringLiteral("羊"), QStringLiteral("牛"),
+                QStringLiteral("大象"), QStringLiteral("熊"), QStringLiteral("斑马"), QStringLiteral("长颈鹿"), QStringLiteral("背包"), QStringLiteral("雨伞"), QStringLiteral("手提包"), QStringLiteral("领带"), QStringLiteral("皮箱"), QStringLiteral("飞盘"),
+                QStringLiteral("滑雪板"), QStringLiteral("单板滑雪"), QStringLiteral("运动球"), QStringLiteral("风筝"), QStringLiteral("棒球棒"), QStringLiteral("棒球手套"), QStringLiteral("滑板"), QStringLiteral("冲浪板"), QStringLiteral("网球拍"), QStringLiteral("瓶子"),
+                QStringLiteral("高脚杯"), QStringLiteral("杯子"), QStringLiteral("叉子"), QStringLiteral("刀"), QStringLiteral("勺子"), QStringLiteral("碗"), QStringLiteral("香蕉"), QStringLiteral("苹果"), QStringLiteral("三明治"), QStringLiteral("橙子"),
+                QStringLiteral("西兰花"), QStringLiteral("胡萝卜"), QStringLiteral("热狗"), QStringLiteral("披萨"), QStringLiteral("甜甜圈"), QStringLiteral("蛋糕"), QStringLiteral("椅子"), QStringLiteral("沙发"), QStringLiteral("盆栽"), QStringLiteral("床"),
+                QStringLiteral("餐桌"), QStringLiteral("马桶"), QStringLiteral("电视"), QStringLiteral("笔记本"), QStringLiteral("鼠标"), QStringLiteral("遥控器"), QStringLiteral("键盘"), QStringLiteral("手机"), QStringLiteral("微波炉"), QStringLiteral("烤箱"),
+                QStringLiteral("面包机"), QStringLiteral("洗碗机"), QStringLiteral("冰箱"), QStringLiteral("书"), QStringLiteral("时钟"), QStringLiteral("花瓶"), QStringLiteral("剪刀"), QStringLiteral("泰迪熊"), QStringLiteral("吹风机"), QStringLiteral("牙刷")
+            };
 
-            auto class_name = (obj.label >= 0 && obj.label < (int)COCO_CLASSES.size()) ? COCO_CLASSES[obj.label] : ("Class " + QString::number(obj.label));
+            QVector<DetectObject> detectObject;
+            detectObject.reserve(objects.size());
 
-            auto label_str = class_name;
+            for (const auto& obj : objects) {
 
-            detectObject.append({ { obj.rect.x + m_cropRect.x, obj.rect.y + m_cropRect.y, obj.rect.width, obj.rect.height }, label_str, obj.prob });
+                auto class_name = (obj.label >= 0 && obj.label < (int)COCO_CLASSES.size()) ? COCO_CLASSES[obj.label] : ("Class " + QString::number(obj.label));
+
+                auto label_str = class_name;
+
+                detectObject.append({ { obj.rect.x + m_cropRect.x, obj.rect.y + m_cropRect.y, obj.rect.width, obj.rect.height }, label_str, obj.prob });
+            }
+
+            emit detected(detectObject);
         }
-
-        emit detected(detectObject);
     }
-
     m_hanlde_frame = false;
+}
+
+void WorkThread::initU2netpModel()
+{
+
+    BboxU2netp::Config cfg;
+    cfg.useVulkan = false;
+
+#if defined(__ANDROID__)
+    cfg.numThreads = ncnn::get_big_cpu_count();
+    cfg.useFP16 = true;
+#else
+    cfg.numThreads = 6;
+    cfg.useFP16 = true;
+#endif
+
+    m_u2netp.setConfig(cfg);
+
+    std::string path = ensureModelFile(":/models/models/u2netp", "u2netp").toStdString();
+    m_u2netp.load_model(path + ".param", path + ".bin");
+}
+
+void WorkThread::initISNetModel()
+{
+    m_ISNetSegmenter.load_model("ncnn_models/isnet_lite.ncnn.param", "ncnn_models/isnet_lite.ncnn.bin");
+}
+
+void WorkThread::initLiteSaliencyNetModel()
+{
+    LiteSaliencyNet::Config cfg;
+    cfg.useVulkan = false;
+
+#if defined(__ANDROID__)
+    cfg.numThreads = ncnn::get_big_cpu_count();
+    cfg.useFP16 = true;
+#else
+    cfg.numThreads = 6;
+    cfg.useFP16 = true;
+#endif
+
+    m_LiteSaliencyNet.setConfig(cfg);
+
+    std::string path = ensureModelFile(":/models/models/lite_320", "lite_320").toStdString();
+    m_LiteSaliencyNet.load_model(path + ".param", path + ".bin");
 }
 
 void WorkThread::studied(const cv::Mat& cur_fg)
@@ -377,7 +474,7 @@ void WorkThread::studied(const cv::Mat& cur_fg)
         return;
     }
 
-    auto [cropGoods, mask] = ProductFeatureEngine::cropROI(m_bg(m_cropRect), cur_fg);
+    auto [cropGoods, mask] = m_LiteSaliencyNet.liteSaliencyCropROI(cur_fg);
     if (cropGoods.empty()) {
         emit error("学习失败，未能获取商品，请确定已放置");
         return;

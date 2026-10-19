@@ -2,10 +2,10 @@
 #define OPENCV_CVCONFIG_H_INCLUDED
 
 /* OpenCV compiled as static or dynamic libs */
-#define BUILD_SHARED_LIBS
+/* #undef BUILD_SHARED_LIBS */
 
 /* OpenCV intrinsics optimized code */
-#define CV_ENABLE_INTRINSICS
+/* #undef CV_ENABLE_INTRINSICS */
 
 /* OpenCV additional optimized code */
 /* #undef CV_DISABLE_OPTIMIZATION */
@@ -41,11 +41,11 @@
 /* #undef HAVE_CUFFT */
 
 /* DirectX */
-#define HAVE_DIRECTX
-#define HAVE_DIRECTX_NV12
-#define HAVE_D3D11
-#define HAVE_D3D10
-#define HAVE_D3D9
+/* #undef HAVE_DIRECTX */
+/* #undef HAVE_DIRECTX_NV12 */
+/* #undef HAVE_D3D11 */
+/* #undef HAVE_D3D10 */
+/* #undef HAVE_D3D9 */
 
 /* Eigen Matrix & Linear Algebra Library */
 /* #undef HAVE_EIGEN */
@@ -63,13 +63,13 @@
 #define HAVE_INTTYPES_H 1
 
 /* Intel Integrated Performance Primitives */
-#define HAVE_IPP
-#define HAVE_IPP_ICV
-#define HAVE_IPP_IW
-#define HAVE_IPP_IW_LL
+/* #undef HAVE_IPP */
+/* #undef HAVE_IPP_ICV */
+/* #undef HAVE_IPP_IW */
+/* #undef HAVE_IPP_IW_LL */
 
 /* JPEG-2000 codec */
-#define HAVE_OPENJPEG
+/* #undef HAVE_OPENJPEG */
 /* #undef HAVE_JASPER */
 
 /* IJG JPEG codec */
@@ -90,15 +90,15 @@
 /* #undef HAVE_NVCUVENC */
 
 /* OpenCL Support */
-#define HAVE_OPENCL
+/* #undef HAVE_OPENCL */
 /* #undef HAVE_OPENCL_STATIC */
 /* #undef HAVE_OPENCL_SVM */
 
 /* NVIDIA OpenCL D3D Extensions support */
-#define HAVE_OPENCL_D3D11_NV
+/* #undef HAVE_OPENCL_D3D11_NV */
 
 /* OpenEXR codec */
-#define HAVE_OPENEXR
+/* #undef HAVE_OPENEXR */
 
 /* OpenGL support*/
 /* #undef HAVE_OPENGL */
@@ -119,7 +119,7 @@
 /* #undef HAVE_HPX */
 
 /* TIFF codec */
-#define HAVE_TIFF
+/* #undef HAVE_TIFF */
 
 /* Define if your processor stores words with the most significant byte
    first (like Motorola and SPARC, unlike Intel and VAX). */
@@ -141,9 +141,9 @@
 /* #undef HAVE_OPENVX */
 
 /* OpenCV trace utilities */
-#define OPENCV_TRACE
+/* #undef OPENCV_TRACE */
 
 /* Library QR-code decoding */
-#define HAVE_QUIRC
+/* #undef HAVE_QUIRC */
 
 #endif // OPENCV_CVCONFIG_H_INCLUDED
