@@ -1,0 +1,11 @@
+LiteSaliencyNet
+├── Backbone: MobileNetV3-Small（ImageNet 预训练）
+│   ├── stage0: /4,  16ch
+│   ├── stage1: /8,  24ch
+│   ├── stage2: /16, 48ch
+│   └── stage3: /32, 576ch
+├── 轻量解码器（自顶向下融合）
+│   ├── 4 级 lateral 1×1 卷积（全部投影到 32ch）
+│   ├── 3 级 smooth 3×3 卷积
+│   └── head（16ch → 1ch 输出）
+└── 输出：sigmoid mask
