@@ -33,6 +33,11 @@ public:
      */
     static float computeSimilarity(const std::vector<float>& vecA, const std::vector<float>& vecB);
 
+    static std::vector<float> extractFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text);
+
+private:
+    ProductFeatureEngine();
+
     /**
      * @brief fuseFeatures 多模态特征拼接融合函数
      * @param visualFeature
@@ -43,9 +48,7 @@ public:
      */
     static std::vector<float> fuseFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text, float wVisual = 1.0f, float wText = 0.20f);
 
-private:
-    ProductFeatureEngine();
-
+    static std::vector<float> mobileNetFeatures(const cv::Mat& roi, const cv::Mat& croppedMask);
     /**
      * @brief 5. 组合主函数：提取 VISUAL_DIM 维复合归一化特征向量
      */
@@ -97,10 +100,12 @@ private:
 private:
     static constexpr size_t VISUAL_DIM = 251; // 原始图片特征维度
     static constexpr size_t TEXT_DIM = 64; // 文本特征维度
+    static constexpr size_t MOBILENET_DIM = 576; // mobileNet特征维度
+
     static FeatureWeights m_featureWeights;
 
 public:
-    static constexpr size_t featureDim = VISUAL_DIM + TEXT_DIM;
+    static constexpr size_t featureDim = MOBILENET_DIM /*VISUAL_DIM + TEXT_DIM*/;
 };
 
 #endif // PRODUCT_FEATURE_ENGINE_HPP

@@ -1,5 +1,31 @@
 #include "productfeatureengine.h"
+#include "ncnn/cpu.h"
 #include <cmath>
+#include <ncnn/net.h>
+
+#ifdef ENABLE_LOG
+#ifdef __ANDROID__
+#include <android/log.h>
+#define LOG_TAG "HandDetector"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#else
+#include <cstdio>
+#define LOGI(...)                 \
+    do {                          \
+        std::printf(__VA_ARGS__); \
+        fflush(stdout);           \
+    } while (0)
+#define LOGE(...)                          \
+    do {                                   \
+        std::fprintf(stderr, __VA_ARGS__); \
+        fflush(stderr);                    \
+    } while (0)
+#endif
+#else
+#define LOGI(...) ((void)0)
+#define LOGE(...) ((void)0)
+#endif
 
 FeatureWeights ProductFeatureEngine::m_featureWeights = { 0.4f, 1.5f, 1.0f };
 
@@ -461,6 +487,16 @@ float ProductFeatureEngine::computeSimilarity(const std::vector<float>& vecA, co
     return dot;
 }
 
+std::vector<float> ProductFeatureEngine::extractFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text)
+{
+    bool cv = false;
+    if (cv) {
+        return fuseFeatures(roi, croppedMask, text);
+    } else {
+        return mobileNetFeatures(roi, croppedMask);
+    }
+}
+
 std::vector<float> ProductFeatureEngine::fuseFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text, float wVisual, float wText)
 {
     std::vector<float> fused;
@@ -482,6 +518,75 @@ std::vector<float> ProductFeatureEngine::fuseFeatures(const cv::Mat& roi, const 
     // C. 整体重新进行 L2 归一化，使得矩阵乘法点积结果仍处于 [0.0, 1.0] 范围内
     normalizeVector(fused);
     return fused;
+}
+
+std::vector<float> ProductFeatureEngine::mobileNetFeatures(const cv::Mat& roi, const cv::Mat& croppedMask)
+{
+    static ncnn::Net net;
+    static bool loaded = false;
+
+    if (!loaded) {
+        loaded = true;
+#if defined(__ANDROID__)
+        net.opt.num_threads = ncnn::get_big_cpu_count();
+
+        net.opt.use_fp16_packed = true;
+        net.opt.use_fp16_storage = true;
+        net.opt.use_fp16_arithmetic = true;
+#else
+        net.opt.num_threads = 2;
+        net.opt.use_fp16_packed = false;
+        net.opt.use_fp16_storage = false;
+        net.opt.use_fp16_arithmetic = false;
+#endif
+
+        net.opt.blob_allocator = 0;
+        net.opt.workspace_allocator = 0;
+        net.opt.openmp_blocktime = 0;
+
+        net.opt.use_packing_layout = true;
+        net.opt.use_winograd_convolution = true;
+        net.opt.use_sgemm_convolution = true;
+
+        net.opt.lightmode = true;
+
+        if (net.load_param("./ncnn_models/mobilenet_v3_small_embedding.ncnn.param") != 0)
+            return {};
+        if (net.load_model("./ncnn_models/mobilenet_v3_small_embedding.ncnn.bin") != 0)
+            return {};
+
+        LOGI("mobileNetFeatures model loaded from file\n");
+    }
+
+    const int input_size = 224;
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize(
+        roi.data, ncnn::Mat::PIXEL_BGR2RGB,
+        roi.cols, roi.rows, input_size, input_size);
+
+    // ★ ImageNet 标准归一化（不能用 YOLO 的 /255）
+    const float mean[3] = { 123.675f, 116.28f, 103.53f };
+    const float norm[3] = { 1.f / 58.395f, 1.f / 57.12f, 1.f / 57.375f };
+    in.substract_mean_normalize(mean, norm);
+
+    ncnn::Extractor ex = net.create_extractor();
+    ex.input("in0", in);
+
+    ncnn::Mat out;
+    ex.extract("out0", out);
+
+    int feat_dim = out.w * out.h;
+    std::vector<float> feature(feat_dim);
+
+    LOGI("mobileNetFeatures feature size:%d\n", feat_dim);
+
+    const float* ptr = (const float*)out.data;
+    for (int i = 0; i < feat_dim; ++i) {
+        feature[i] = ptr[i];
+    }
+
+    normalizeVector(feature);
+
+    return feature;
 }
 
 void ProductFeatureEngine::normalizeVector(std::vector<float>& vec)

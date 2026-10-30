@@ -164,7 +164,7 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
 
     const auto text = detectText(cropGoods);
 
-    std::vector<float> vec1 = ProductFeatureEngine::fuseFeatures(cropGoods, mask, text);
+    std::vector<float> vec1 = ProductFeatureEngine::extractFeatures(cropGoods, mask, text);
 
     std::vector<SearchResult> results = m_productDatabase.search(vec1);
 
@@ -173,6 +173,8 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
     } else {
         emit error(QString("识别商品《%1》，相似度得分:%2").arg(QString::fromStdString(results.at(0).name)).arg(results.at(0).similarity));
     }
+
+    qDebug() << "CropROI:" << t.elapsed();
 
     for (const auto& d : results) {
         auto val = std::find_if(recogResult.cbegin(), recogResult.cend(), [&d](const RecogResult& pre) {
@@ -322,28 +324,28 @@ QString WorkThread::ensureModelFile(const QString& qrcPath, const QString& fileN
 
 std::string WorkThread::detectText(const cv::Mat& cur_fg)
 {
-    int padding = 5; // 原 50 -> 缩减边缘 Padding 填充，减少无用像素计算
-    int maxSideLen = 320; // 原 1024 -> 降低检测输入分辨率（核心！计算量减少近 60%）
-    float boxScoreThresh = 0.80f; // 原 0.5f -> 提高框过滤阈值，少跑无用杂质框的 Rec 推理
-    float boxThresh = 0.8f;
-    float unClipRatio = 1.5f; // 原 1.6f -> 稍缩减文字框扩张比例
-    bool doAngle = true; // 原 true -> 禁用文字方向分类（核心！直接跳过所有文本框的 Cls 推理）
-    bool mostAngle = false; // 原 true -> 关闭全局角度校正
+    // int padding = 5; // 原 50 -> 缩减边缘 Padding 填充，减少无用像素计算
+    // int maxSideLen = 320; // 原 1024 -> 降低检测输入分辨率（核心！计算量减少近 60%）
+    // float boxScoreThresh = 0.80f; // 原 0.5f -> 提高框过滤阈值，少跑无用杂质框的 Rec 推理
+    // float boxThresh = 0.8f;
+    // float unClipRatio = 1.5f; // 原 1.6f -> 稍缩减文字框扩张比例
+    // bool doAngle = true; // 原 true -> 禁用文字方向分类（核心！直接跳过所有文本框的 Cls 推理）
+    // bool mostAngle = false; // 原 true -> 关闭全局角度校正
 
-    cv::Mat textMat;
-    cv::cvtColor(cur_fg, textMat, cv::COLOR_BGR2RGB);
+    // cv::Mat textMat;
+    // cv::cvtColor(cur_fg, textMat, cv::COLOR_BGR2RGB);
 
-    OcrResult result = m_ocr->detect(textMat, padding, maxSideLen, boxScoreThresh, boxThresh, unClipRatio, doAngle, mostAngle);
+    // OcrResult result = m_ocr->detect(textMat, padding, maxSideLen, boxScoreThresh, boxThresh, unClipRatio, doAngle, mostAngle);
 
-    qInfo() << "txt:" << QString::fromStdString(result.strRes);
+    // qInfo() << "txt:" << QString::fromStdString(result.strRes);
 
-    auto clear = m_textCleaner.clean(result.strRes);
+    // auto clear = m_textCleaner.clean(result.strRes);
 
-    auto txt = QString::fromStdString(clear);
+    // auto txt = QString::fromStdString(clear);
 
-    qInfo() << "clean txt:" << txt;
+    // qInfo() << "clean txt:" << txt;
 
-    return clear;
+    return {};
 }
 
 void WorkThread::initYoloModel()
@@ -481,7 +483,7 @@ void WorkThread::initLiteSaliencyNetModel()
 void WorkThread::initYoloHandModel()
 {
     m_yoloDetectorHand.reset(new HandDetector);
-    std::string path = ensureModelFile(":/models/models/yolo11n_hand", "yolo11n_hand").toStdString();
+    std::string path = ensureModelFile(":/models/models/yolo11n_hand_320", "yolo11n_hand_320").toStdString();
     m_yoloDetectorHand->load_model(path + ".param", path + ".bin");
 }
 
@@ -500,7 +502,7 @@ void WorkThread::studied(const cv::Mat& cur_fg)
 
     const auto text = detectText(cropGoods);
 
-    m_studiedRecord.feature = ProductFeatureEngine::fuseFeatures(cropGoods, mask, text);
+    m_studiedRecord.feature = ProductFeatureEngine::extractFeatures(cropGoods, mask, text);
 
     if (m_studiedRecord.id == 0) {
         m_studiedRecord.id = (quint64)QDateTime::currentSecsSinceEpoch();

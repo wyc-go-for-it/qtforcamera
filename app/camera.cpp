@@ -84,15 +84,28 @@ Camera::Camera()
     initDevices();
 
     connect(ui->label_target, &QAbstractButton::clicked, this, []() {
-        HandDetector detector;
+        QProgressDialog dialog;
+        dialog.setLabelText("正在标注....");
 
-        detector.load_model("./ncnn_models/yolo11n_hand.param", "./ncnn_models/yolo11n_hand.bin");
+        QThreadPool::globalInstance()->start([&dialog]() {
+            HandDetector detector;
 
-        std::string img_dir = "./my_test_images/frames1/frames";
-        std::string label_dir = "./label_dir";
-        std::string vis_dir = "./vis_dir";
+            detector.load_model("./ncnn_models/yolo11n_hand.param", "./ncnn_models/yolo11n_hand.bin");
 
-        detector.label(img_dir, label_dir, vis_dir);
+            std::string img_dir = "./test_label/frames";
+            std::string label_dir = "./label_dir";
+            std::string vis_dir = "./vis_dir";
+
+            uint32_t num_files = 0;
+
+            detector.label(img_dir, label_dir, vis_dir, num_files);
+
+            dialog.setValue(num_files);
+
+            dialog.accept();
+        });
+
+        dialog.exec();
     });
 
     connect(ui->captureWidget, &QTabWidget::currentChanged, this, &Camera::updateCaptureMode);
@@ -694,7 +707,7 @@ void Camera::initRecogInfo()
             QList<RecogResult> copy;
 
             std::copy_if(data.cbegin(), data.cend(), std::back_inserter(copy), [](const RecogResult& r) {
-                return r.similarity > 0.8;
+                return r.similarity > 0.5;
             });
 
             model->addRows(copy);

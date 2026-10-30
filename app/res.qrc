@@ -15,5 +15,9 @@
         <file>models/lite_320.param</file>
         <file>models/yolo11n_hand.bin</file>
         <file>models/yolo11n_hand.param</file>
+        <file>models/mobilenet_v3_small_embedding.ncnn.bin</file>
+        <file>models/mobilenet_v3_small_embedding.ncnn.param</file>
+        <file>models/yolo11n_hand_320.bin</file>
+        <file>models/yolo11n_hand_320.param</file>
     </qresource>
 </RCC>

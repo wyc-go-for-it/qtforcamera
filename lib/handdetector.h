@@ -13,6 +13,12 @@ struct Detection {
     uint32_t label = 0;
 };
 
+struct ScaleParameter {
+    int pad_x;
+    int pad_y;
+    float scale;
+};
+
 class WYCAI_EXPORT HandDetector {
 public:
     HandDetector();
@@ -24,7 +30,7 @@ public:
         float conf_thresh = 0.60f,
         float iou_thresh = 0.45f);
 
-    void label(const std::string& img_dir, const std::string& label_dir, const std::string& vis_dir);
+    void label(const std::string& img_dir, const std::string& label_dir, const std::string& vis_dir, uint32_t& num_files);
 
 private:
     static void nms(std::vector<Detection>& dets, float iou_thresh);

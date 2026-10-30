@@ -59,15 +59,15 @@ bool LiteSaliencyNet::load_model(const std::string& paramPath, const std::string
     m_net.opt.lightmode = true;
 
     if (m_net.load_param(paramPath.c_str()) != 0) {
-        LOGE("LiteSaliencyNet load_param failed: %s", paramPath.c_str());
+        LOGE("LiteSaliencyNet load_param failed: %s\n", paramPath.c_str());
         return false;
     }
     if (m_net.load_model(binPath.c_str()) != 0) {
-        LOGE("LiteSaliencyNet load_model failed: %s", binPath.c_str());
+        LOGE("LiteSaliencyNet load_model failed: %s\n", binPath.c_str());
         return false;
     }
     m_loaded = true;
-    LOGI("LiteSaliencyNet model loaded from file");
+    LOGI("LiteSaliencyNet model loaded from file\n");
     return true;
 }
 
@@ -95,6 +95,11 @@ std::pair<cv::Mat, cv::Mat> LiteSaliencyNet::liteSaliencyCropROI(const cv::Mat& 
 
     productMask = mask;
 
+    cv::Mat labels, stats, centroids;
+    int num_labels = cv::connectedComponentsWithStats(productMask, labels, stats, centroids, 8, CV_32S);
+
+    LOGI("共发现<%d>个潜在区域\n", num_labels - 1);
+
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(productMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
 
@@ -104,6 +109,13 @@ std::pair<cv::Mat, cv::Mat> LiteSaliencyNet::liteSaliencyCropROI(const cv::Mat& 
     std::vector<cv::Point> allPts;
     for (const auto& c : contours) {
         if (cv::contourArea(c) > minArea) {
+
+            cv::rectangle(fg,
+                cv::boundingRect(c) & cv::Rect(0, 0, fg.cols, fg.rows),
+                cv::Scalar(0, 0, 255, 255),
+                1,
+                cv::LINE_8);
+
             allPts.insert(allPts.end(), c.begin(), c.end());
         }
     }
@@ -113,7 +125,7 @@ std::pair<cv::Mat, cv::Mat> LiteSaliencyNet::liteSaliencyCropROI(const cv::Mat& 
 
     cv::rectangle(fg,
         cv::boundingRect(allPts) & cv::Rect(0, 0, fg.cols, fg.rows),
-        cv::Scalar(0, 0, 255),
+        cv::Scalar(255, 255, 255, 255),
         2,
         cv::LINE_8);
 
@@ -190,7 +202,7 @@ cv::Mat LiteSaliencyNet::runNetwork(const cv::Mat& bgr)
 
     double mn, mx;
     cv::minMaxLoc(raw, &mn, &mx);
-    LOGI("mask min=%f max=%f mean=%f", mn, mx, cv::mean(raw)[0]);
+    LOGI("mask min=%f max=%f mean=%f\n", mn, mx, cv::mean(raw)[0]);
 
     return raw;
 }
@@ -198,11 +210,11 @@ cv::Mat LiteSaliencyNet::runNetwork(const cv::Mat& bgr)
 cv::Mat LiteSaliencyNet::createMask(const cv::Mat& bgr)
 {
     if (!m_loaded) {
-        LOGE("model not loaded");
+        LOGE("model not loaded\n");
         return {};
     }
     if (bgr.empty() || bgr.type() != CV_8UC3) {
-        LOGE("invalid input: must be CV_8UC3");
+        LOGE("invalid input: must be CV_8UC3\n");
         return {};
     }
 

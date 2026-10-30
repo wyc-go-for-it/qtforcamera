@@ -1,4 +1,5 @@
 #include "handdetector.h"
+#include "ncnn/cpu.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -67,21 +68,21 @@ bool HandDetector::load_model(const std::string param, const std::string bin)
     net.opt.lightmode = true;
 
     if (net.load_param(param.c_str()) != 0) {
-        LOGE("[HandDetector] load_param failed: %s", param.c_str());
+        LOGE("[HandDetector] load_param failed: %s\n", param.c_str());
         return false;
     }
     if (net.load_model(bin.c_str()) != 0) {
-        LOGE("[HandDetector] load_model failed: %s", bin.c_str());
+        LOGE("[HandDetector] load_model failed: %s\n", bin.c_str());
         return false;
     }
     loaded = true;
 
-    LOGI("[HandDetector] has loaded");
+    LOGI("[HandDetector] has loaded/n");
 
     return true;
 }
 
-cv::Mat letterbox(const cv::Mat& src, int target_size,
+cv::Mat letterbox(const cv::Mat& src, int target_size, ScaleParameter& parameter,
     cv::Scalar color = cv::Scalar(114, 114, 114))
 {
     int w = src.cols, h = src.rows;
@@ -103,6 +104,10 @@ cv::Mat letterbox(const cv::Mat& src, int target_size,
 
     LOGI("letterbox: scale=%.3f pad_w=%d pad_h=%d\n", scale, pad_w, pad_h);
 
+    parameter.scale = scale;
+    parameter.pad_x = pad_w;
+    parameter.pad_y = pad_h;
+
     return out;
 }
 
@@ -114,31 +119,14 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
-    const int input_size = 640;
+    const int input_size = 320;
 
-    // float pre_scale = 400 / (float)std::max(bgr.cols, bgr.rows);
-    // if (pre_scale > 1.0f)
-    //     pre_scale = 1.0f;
+    ScaleParameter scaleParam;
+    cv::Mat input = letterbox(bgr, input_size, scaleParam);
 
-    // cv::Mat pre_resized;
-    // cv::resize(bgr, pre_resized, cv::Size(),
-    //     pre_scale, pre_scale, cv::INTER_LINEAR);
-
-    // int pre_w = pre_resized.cols;
-    // int pre_h = pre_resized.rows;
-
-    // cv::Mat input(input_size, input_size, CV_8UC3, cv::Scalar(114, 114, 114));
-    // int pad_x = (input_size - pre_w) / 2;
-    // int pad_y = (input_size - pre_h) / 2;
-
-    // pre_resized.copyTo(input(cv::Rect(pad_x, pad_y, pre_w, pre_h)));
-
-    cv::Mat input = letterbox(bgr, input_size);
-
-    int w = bgr.cols, h = bgr.rows;
-    float pre_scale = std::min((float)input.cols / w, (float)input.rows / h);
-    int pad_x = (input.cols - w) / 2;
-    int pad_y = (input.rows - h) / 2;
+    float pre_scale = scaleParam.scale;
+    int pad_x = scaleParam.pad_x;
+    int pad_y = scaleParam.pad_y;
 
     ncnn::Mat in = ncnn::Mat::from_pixels(
         input.data, ncnn::Mat::PIXEL_BGR2RGB,
@@ -155,7 +143,7 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
     ncnn::Mat out;
     if (ex.extract("out0", out) != 0)
         return results;
-    if (out.w != 8400 || out.h != 5) {
+    if (out.w != 2100 || out.h != 5) {
         LOGE("unexpected out: w=%d h=%d", out.w, out.h);
         return results;
     }
@@ -168,7 +156,7 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
 
     std::vector<std::pair<float, int>> confs;
 
-    for (int i = 0; i < 8400; ++i) {
+    for (int i = 0; i < 2100; ++i) {
         float conf = conf_ptr[i];
 
         confs.push_back({ conf, i });
@@ -207,13 +195,13 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
     return results;
 }
 
-void HandDetector::label(const std::string& img_dir, const std::string& label_dir, const std::string& vis_dir)
+void HandDetector::label(const std::string& img_dir, const std::string& label_dir, const std::string& vis_dir, uint32_t& num_files)
 {
 
     namespace fs = std::filesystem;
 
-    auto conf_thresh = 0.25f;
-    auto iou_thresh = 0.45;
+    auto conf_thresh = 0.5f;
+    auto iou_thresh = 0.6;
 
     fs::create_directories(label_dir);
     if (!vis_dir.empty())
@@ -223,11 +211,15 @@ void HandDetector::label(const std::string& img_dir, const std::string& label_di
     int processed = 0, skipped = 0, total_boxes = 0;
 
     fs::path last_path;
+
     for (auto& entry : fs::directory_iterator(img_dir)) {
         if (!entry.is_regular_file())
             continue;
 
+        num_files++;
+
         std::string path = entry.path().string();
+
         std::string ext = entry.path().extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (std::find(exts.begin(), exts.end(), ext) == exts.end())
@@ -240,49 +232,119 @@ void HandDetector::label(const std::string& img_dir, const std::string& label_di
             continue;
         }
 
-        last_path = entry.path();
-
-        auto dets = detect(img, conf_thresh, iou_thresh);
+        std::vector<Detection> dets = detect(img, conf_thresh, iou_thresh);
 
         if (dets.empty()) {
-            fs::remove(path);
-            LOGI("删除文件：%s", path.c_str());
+            // fs::remove(path);
+            LOGI("删除文件：%s\n", path.c_str());
             continue;
         }
+
+        last_path = entry.path();
 
         std::string stem = entry.path().stem().string();
 
         // 写 YOLO 标签
-        std::string lbl_path = label_dir + "/" + stem + ".txt";
-        std::ofstream fp(lbl_path);
-        if (!fp.is_open()) {
-            LOGI("open label failed: %s\n", lbl_path.c_str());
-            skipped++;
-            continue;
+        bool txt = false;
+        if (txt) {
+            std::string lbl_path = label_dir + "/" + stem + ".txt";
+            std::ofstream fp(lbl_path);
+            if (!fp.is_open()) {
+                LOGI("open label failed: %s\n", lbl_path.c_str());
+                skipped++;
+                continue;
+            }
+            int w = img.cols, h = img.rows;
+            for (auto& d : dets) {
+                auto rect = d.rect; // cv::Rect_<float>: x, y, width, height
+
+                // YOLO: cx, cy 是中心点，bw, bh 是宽高，全部归一化到 [0,1]
+                float cx = (rect.x + rect.width * 0.5f) / w;
+                float cy = (rect.y + rect.height * 0.5f) / h;
+                float bw = rect.width / w;
+                float bh = rect.height / h;
+
+                // clamp 到 [0,1]，防止超界
+                cx = std::max(0.f, std::min(1.f, cx));
+                cy = std::max(0.f, std::min(1.f, cy));
+                bw = std::max(0.f, std::min(1.f, bw));
+                bh = std::max(0.f, std::min(1.f, bh));
+
+                fp << "0 " << cx << " " << cy << " " << bw << " " << bh << "\n";
+            }
+            fp.close();
+        } else {
+
+            std::string json_path = label_dir + "/" + stem + ".json";
+            std::ofstream jf(json_path);
+            if (!jf.is_open()) {
+                LOGI("open json failed: %s\n", json_path.c_str());
+                skipped++;
+                continue;
+            }
+
+            // 获取带后缀的图片名（用于 imagePath 字段）
+            std::string img_name = entry.path().filename().string();
+
+            // 开始拼接 JSON
+            jf << "{\n";
+            jf << "  \"version\": \"4.2.0\",\n";
+            jf << "  \"flags\": {},\n";
+            jf << "  \"checked\": false,\n";
+            jf << "  \"shapes\": [\n";
+
+            int w = img.cols, h = img.rows;
+            jf << std::fixed << std::setprecision(6); // 设置浮点数精度
+
+            for (size_t i = 0; i < dets.size(); ++i) {
+                auto rect = dets[i].rect; // cv::Rect_<float>: x, y, width, height
+
+                // 计算 4 个角点，并限制在图片范围内
+                float x1 = std::max(0.f, std::min((float)w, rect.x));
+                float y1 = std::max(0.f, std::min((float)h, rect.y));
+                float x2 = std::max(0.f, std::min((float)w, rect.x + rect.width));
+                float y2 = std::max(0.f, std::min((float)h, rect.y + rect.height));
+
+                jf << "    {\n";
+                jf << "      \"label\": \"hand\",\n";
+                // 如果想把置信度填进去，把 null 改成 dets[i].prob
+                jf << "      \"score\": null,\n";
+                jf << "      \"points\": [\n";
+                jf << "        [" << x1 << ", " << y1 << "],\n"; // 左上
+                jf << "        [" << x2 << ", " << y1 << "],\n"; // 右上
+                jf << "        [" << x2 << ", " << y2 << "],\n"; // 右下
+                jf << "        [" << x1 << ", " << y2 << "]\n"; // 左下
+                jf << "      ],\n";
+                jf << "      \"group_id\": null,\n";
+                jf << "      \"description\": \"\",\n";
+                jf << "      \"difficult\": false,\n";
+                jf << "      \"shape_type\": \"rectangle\",\n";
+                jf << "      \"flags\": {},\n";
+                jf << "      \"attributes\": {},\n";
+                jf << "      \"kie_linking\": []\n";
+                jf << "    }";
+
+                // 不是最后一个框，加逗号
+                if (i < dets.size() - 1)
+                    jf << ",";
+                jf << "\n";
+            }
+
+            jf << "  ],\n";
+            jf << "  \"imagePath\": \"" << img_name << "\",\n";
+            jf << "  \"imageData\": null,\n";
+            jf << "  \"imageHeight\": " << h << ",\n";
+            jf << "  \"imageWidth\": " << w << "\n";
+            jf << "}\n";
+
+            jf.close();
+
+            cv::imwrite(label_dir + "/" + stem + ".jpg", img);
         }
-        int w = img.cols, h = img.rows;
-        for (auto& d : dets) {
-            auto rect = d.rect; // cv::Rect_<float>: x, y, width, height
-
-            // YOLO: cx, cy 是中心点，bw, bh 是宽高，全部归一化到 [0,1]
-            float cx = (rect.x + rect.width * 0.5f) / w;
-            float cy = (rect.y + rect.height * 0.5f) / h;
-            float bw = rect.width / w;
-            float bh = rect.height / h;
-
-            // clamp 到 [0,1]，防止超界
-            cx = std::max(0.f, std::min(1.f, cx));
-            cy = std::max(0.f, std::min(1.f, cy));
-            bw = std::max(0.f, std::min(1.f, bw));
-            bh = std::max(0.f, std::min(1.f, bh));
-
-            fp << "0 " << cx << " " << cy << " " << bw << " " << bh << "\n";
-        }
-        fp.close();
 
         // 可视化
         if (!vis_dir.empty()) {
-            cv::Mat vis = img.clone();
+            cv::Mat vis = img;
             for (auto& d : dets) {
                 auto rect = d.rect;
 
@@ -300,7 +362,7 @@ void HandDetector::label(const std::string& img_dir, const std::string& label_di
 
         processed++;
         total_boxes += (int)dets.size();
-        if (processed % 50 == 0) {
+        if (processed % 150 == 0) {
             LOGI("[%d] %s: %zu hands\n", processed, stem.c_str(), dets.size());
         }
     }
@@ -311,14 +373,15 @@ void HandDetector::label(const std::string& img_dir, const std::string& label_di
         total_boxes, processed > 0 ? (float)total_boxes / processed : 0.f);
 
     if (!last_path.empty()) {
+
         cv::Mat img = cv::imread(last_path.string());
         int w = img.cols, h = img.rows;
 
-        std::ifstream f("label_dir/" + last_path.filename().string());
+        std::ifstream f("label_dir/" + last_path.stem().string() + ".txt");
         std::string line;
         while (std::getline(f, line)) {
             float cls, cx, cy, bw, bh;
-            if (sscanf_s(line.c_str(), "%f %f %f %f %f", &cls, &cx, &cy, &bw, &bh) == 5) {
+            if (sscanf(line.c_str(), "%f %f %f %f %f", &cls, &cx, &cy, &bw, &bh) == 5) {
                 float x1 = (cx - bw / 2) * w;
                 float y1 = (cy - bh / 2) * h;
                 float x2 = (cx + bw / 2) * w;
