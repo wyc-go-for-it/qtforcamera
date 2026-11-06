@@ -83,6 +83,9 @@ set(TARGET_NAME wyc_ai)
 add_library(${TARGET_NAME} SHARED
     ${PROJECT_SOURCES}
     ${OCR_SOURCES}
+    face/faceengine.h face/faceengine.cpp
+    face/facelandmark.h face/facelandmark.cpp
+    face/faceInfo.h
  )
 
 set(OPENCV_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv2")
@@ -101,11 +104,9 @@ target_compile_definitions(${TARGET_NAME}
     PUBLIC WYCAI_EXPORT_DLL
 )
 
-
 if(ENABLE_LOG)
     target_compile_definitions(${TARGET_NAME} PRIVATE ENABLE_LOG)
 endif()
-target_compile_definitions(${TARGET_NAME} PRIVATE ENABLE_LOG)
 
 target_include_directories(${TARGET_NAME}
     PUBLIC

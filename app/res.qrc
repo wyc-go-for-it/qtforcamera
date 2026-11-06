@@ -19,5 +19,11 @@
         <file>models/mobilenet_v3_small_embedding.ncnn.param</file>
         <file>models/yolo11n_hand_320.bin</file>
         <file>models/yolo11n_hand_320.param</file>
+        <file>models/2d106det.ncnn.bin</file>
+        <file>models/2d106det.ncnn.param</file>
+        <file>models/det_2.5g.ncnn.bin</file>
+        <file>models/det_2.5g.ncnn.param</file>
+        <file>models/w600k_r50.ncnn.bin</file>
+        <file>models/w600k_r50.ncnn.param</file>
     </qresource>
 </RCC>

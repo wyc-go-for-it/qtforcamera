@@ -34,6 +34,8 @@ struct DetectObject {
     QRectF rect; // 目标框 [x, y, width, height]
     QString name; // 类别
     float prob; // 置信度
+    QVector<QPointF> landmarks;
+    QVector<QPointF> lm106;
 };
 Q_DECLARE_METATYPE(DetectObject);
 
@@ -52,6 +54,10 @@ public slots:
     void onRecognition(bool recog);
     void onUpdateVertex(QVector<QPointF> points, QCamera::Position pos, qint32 rotationAngle);
 
+    static QString modelDir();
+    static QString ncnnModelDir();
+    static QString ensureModelFile(const QString& qrcPath, const QString& fileName);
+
 signals:
     void cropROIed(const QImage& frame, const QImage& diff, const QImage& undiff, const QImage& binary_diff);
     void error(const QString& error);
@@ -62,14 +68,11 @@ signals:
 private:
     void studied(const cv::Mat& cur_fg);
     void recognition(const cv::Mat& cur_fg);
-    QString modelDir();
-    QString ncnnModelDir();
+
     void initDir();
     cv::Mat cropVideoFrame(QVideoFrame& frame);
     void loadBG();
     void initOcrModel();
-
-    QString ensureModelFile(const QString& qrcPath, const QString& fileName);
 
     std::string detectText(const cv::Mat& cur_fg);
 
@@ -93,7 +96,7 @@ private:
     QMutex m_lock;
     bool m_hanlde_frame = false;
 
-    ProductDatabase m_productDatabase;
+    std::unique_ptr<ProductDatabase> m_productDatabase;
     ProductRecord m_studiedRecord;
 
     std::unique_ptr<OcrLite> m_ocr;

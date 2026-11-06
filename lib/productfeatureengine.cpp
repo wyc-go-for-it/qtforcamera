@@ -563,7 +563,7 @@ std::vector<float> ProductFeatureEngine::mobileNetFeatures(const cv::Mat& roi, c
         roi.data, ncnn::Mat::PIXEL_BGR2RGB,
         roi.cols, roi.rows, input_size, input_size);
 
-    // ★ ImageNet 标准归一化（不能用 YOLO 的 /255）
+    // ★ ImageNet 标准归一化
     const float mean[3] = { 123.675f, 116.28f, 103.53f };
     const float norm[3] = { 1.f / 58.395f, 1.f / 57.12f, 1.f / 57.375f };
     in.substract_mean_normalize(mean, norm);

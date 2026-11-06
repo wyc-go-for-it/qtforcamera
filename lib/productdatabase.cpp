@@ -138,7 +138,7 @@ void ProductDatabase::rebuildMatrix()
         featureMatrix = cv::Mat();
         return;
     }
-    featureMatrix = cv::Mat(static_cast<int>(records.size()), ProductFeatureEngine::featureDim, CV_32F);
+    featureMatrix = cv::Mat(static_cast<int>(records.size()), m_featureDim, CV_32F);
     for (size_t i = 0; i < records.size(); ++i) {
         float* rowPtr = featureMatrix.ptr<float>(static_cast<int>(i));
         std::copy(records[i].feature.begin(), records[i].feature.end(), rowPtr);
@@ -150,7 +150,7 @@ bool ProductDatabase::addProduct(const ProductRecord& record)
     static const int MAX_TEMPLATES = 5; // 每个商品最多保留 5 个姿态模板
     static const float MERGE_THRESH = 0.85f; // 判定为相同姿态的相似度阈值
 
-    if (record.feature.size() != static_cast<size_t>(ProductFeatureEngine::featureDim)) {
+    if (record.feature.size() != static_cast<size_t>(m_featureDim)) {
         return false;
     }
     ProductRecord newRecord = record;
@@ -206,6 +206,8 @@ bool ProductDatabase::addProduct(const ProductRecord& record)
 
             std::cout << "bestIdx:" << bestIdx << " maxScore:" << maxScore << " matchCount:" << records.at(bestIdx).matchCount << std::endl;
         } else {
+            newRecord.tempId = (++maxTempId);
+
             if (matchedIndices.size() >= MAX_TEMPLATES) {
                 int targetEliminateIdx = -1;
                 uint32_t minCount = UINT32_MAX;
@@ -249,7 +251,7 @@ void ProductDatabase::appendTemplate(const ProductRecord& newRecord)
 {
     records.push_back(newRecord);
 
-    cv::Mat rowMat(1, ProductFeatureEngine::featureDim, CV_32F, const_cast<float*>(newRecord.feature.data()));
+    cv::Mat rowMat(1, m_featureDim, CV_32F, const_cast<float*>(newRecord.feature.data()));
 
     if (featureMatrix.empty()) {
         featureMatrix = rowMat.clone();
@@ -304,7 +306,7 @@ bool ProductDatabase::saveModel(const std::string& filepath)
         ofs.write(item.barcode.data(), codeLen);
 
         // 写入 featureDim 维 float 特征数组
-        ofs.write(reinterpret_cast<const char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
+        ofs.write(reinterpret_cast<const char*>(item.feature.data()), m_featureDim * sizeof(float));
 
         ofs.write(reinterpret_cast<const char*>(&item.matchCount), sizeof(item.matchCount));
     }
@@ -337,8 +339,8 @@ bool ProductDatabase::loadModel(const std::string& filepath)
         item.barcode.resize(codeLen);
         ifs.read(&item.barcode[0], codeLen);
 
-        item.feature.resize(ProductFeatureEngine::featureDim);
-        ifs.read(reinterpret_cast<char*>(item.feature.data()), ProductFeatureEngine::featureDim * sizeof(float));
+        item.feature.resize(m_featureDim);
+        ifs.read(reinterpret_cast<char*>(item.feature.data()), m_featureDim * sizeof(float));
 
         ifs.read(reinterpret_cast<char*>(&item.matchCount), sizeof(item.matchCount));
 
@@ -353,12 +355,12 @@ bool ProductDatabase::loadModel(const std::string& filepath)
 
 std::vector<SearchResult> ProductDatabase::search(const std::vector<float>& queryFeature, int topK)
 {
-    if (featureMatrix.empty() || queryFeature.size() != static_cast<size_t>(ProductFeatureEngine::featureDim)) {
+    if (featureMatrix.empty() || queryFeature.size() != static_cast<size_t>(m_featureDim)) {
         return {};
     }
 
     // 将 query 转为 featureDim x 1 列向量
-    cv::Mat queryMat(ProductFeatureEngine::featureDim, 1, CV_32F, const_cast<float*>(queryFeature.data()));
+    cv::Mat queryMat(m_featureDim, 1, CV_32F, const_cast<float*>(queryFeature.data()));
 
     // 矩阵乘法： (N x featureDim) * (featureDim x 1) = (N x 1) 得分矩阵
     cv::Mat scores = featureMatrix * queryMat;

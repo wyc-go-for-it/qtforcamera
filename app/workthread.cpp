@@ -40,6 +40,8 @@ WorkThread::WorkThread(QObject* parent)
 {
     moveToThread(&m_thread);
 
+    m_productDatabase.reset(new ProductDatabase(ProductFeatureEngine::featureDim));
+
     connect(&m_thread, &QThread::started, this, [this]() {
         initDir();
 
@@ -53,7 +55,7 @@ WorkThread::WorkThread(QObject* parent)
 
         initYoloHandModel();
 
-        m_productDatabase.loadModel((modelDir() + "/data.bat").toStdString());
+        m_productDatabase->loadModel((modelDir() + "/data.bat").toStdString());
 
         // loadBG();
     });
@@ -61,7 +63,7 @@ WorkThread::WorkThread(QObject* parent)
 
 WorkThread::~WorkThread()
 {
-    m_productDatabase.saveModel((modelDir() + "/data.bat").toStdString());
+    m_productDatabase->saveModel((modelDir() + "/data.bat").toStdString());
 
     m_thread.quit();
     m_thread.wait(3000);
@@ -166,7 +168,7 @@ void WorkThread::recognition(const cv::Mat& cur_fg)
 
     std::vector<float> vec1 = ProductFeatureEngine::extractFeatures(cropGoods, mask, text);
 
-    std::vector<SearchResult> results = m_productDatabase.search(vec1);
+    std::vector<SearchResult> results = m_productDatabase->search(vec1);
 
     if (results.empty()) {
         emit error("未识别到商品");
@@ -388,11 +390,11 @@ void WorkThread::handleFrame()
             else if (data.channels() == 1)
                 cv::cvtColor(data, frame, cv::COLOR_GRAY2BGR);
 
-            // std::vector<Object> objects;
+            std::vector<Object> objects;
 
             // m_yoloDetector->detect(frame, objects, 0.5f, 0.45f);
 
-            std::vector<Detection> objects = m_yoloDetectorHand->detect(frame);
+            // std::vector<Detection> objects = m_yoloDetectorHand->detect(frame);
 
             for (const auto& det : objects) {
                 if (det.label == 0 && det.prob > 0.01) {
@@ -422,7 +424,7 @@ void WorkThread::handleFrame()
 
                 auto label_str = class_name;
 
-                detectObject.append({ { obj.rect.x + m_cropRect.x, obj.rect.y + m_cropRect.y, obj.rect.width, obj.rect.width }, label_str, obj.prob });
+                detectObject.append({ { obj.rect.x + m_cropRect.x, obj.rect.y + m_cropRect.y, obj.rect.width, obj.rect.height }, label_str, obj.prob });
             }
 
             emit detected(detectObject);
@@ -508,7 +510,7 @@ void WorkThread::studied(const cv::Mat& cur_fg)
         m_studiedRecord.id = (quint64)QDateTime::currentSecsSinceEpoch();
     }
 
-    bool code = m_productDatabase.addProduct(m_studiedRecord);
+    bool code = m_productDatabase->addProduct(m_studiedRecord);
     if (code) {
         emit error("学习成功");
     } else {

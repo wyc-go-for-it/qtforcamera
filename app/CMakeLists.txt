@@ -13,6 +13,8 @@ set(HEADER
     goodsdelegate.h
     customglsurface.h
     glrendererwidget.h
+    facedialog.h
+    faceworkthread.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -30,6 +32,8 @@ set(SOURCES
     goodsdelegate.cpp
     customglsurface.cpp
     glrendererwidget.cpp
+    facedialog.cpp
+    faceworkthread.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -39,6 +43,7 @@ set(UI
     camera.ui
     imagesettings.ui
     videosettings.ui
+    facedialog.ui
 )
 
 set(PROJECT_SOURCES
@@ -83,6 +88,7 @@ else()
             ${PROJECT_SOURCES}
             ${OCR_CORE_SRCS}
             ${RESOURCES}
+            filepickerdialog.h filepickerdialog.cpp
         )
     endif()
 endif()

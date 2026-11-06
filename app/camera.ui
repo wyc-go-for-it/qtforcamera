@@ -217,35 +217,9 @@
          <attribute name="title">
           <string>图像</string>
          </attribute>
-         <layout class="QGridLayout" name="gridLayout">
-          <item row="6" column="0">
-           <widget class="QLabel" name="label">
-            <property name="font">
-             <font>
-              <family>Microsoft YaHei</family>
-              <pointsize>12</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>曝光补偿</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="0">
-           <widget class="QPushButton" name="takeImageBtn">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>拍照</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0">
-           <widget class="QPushButton" name="studyBtn">
+         <layout class="QGridLayout" name="gridLayout" columnstretch="1,1">
+          <item row="4" column="0">
+           <widget class="QPushButton" name="label_target">
             <property name="enabled">
              <bool>true</bool>
             </property>
@@ -256,7 +230,7 @@
              <bool>true</bool>
             </property>
             <property name="text">
-             <string>学习</string>
+             <string>标注</string>
             </property>
             <property name="checkable">
              <bool>true</bool>
@@ -266,26 +240,39 @@
             </property>
            </widget>
           </item>
-          <item row="7" column="0">
-           <widget class="QSlider" name="exposureCompensation">
-            <property name="minimum">
-             <number>-4</number>
+          <item row="4" column="1">
+           <widget class="QPushButton" name="face">
+            <property name="enabled">
+             <bool>true</bool>
             </property>
-            <property name="maximum">
-             <number>4</number>
+            <property name="focusPolicy">
+             <enum>Qt::StrongFocus</enum>
             </property>
-            <property name="pageStep">
-             <number>2</number>
+            <property name="autoFillBackground">
+             <bool>true</bool>
             </property>
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+            <property name="text">
+             <string>人脸检测</string>
             </property>
-            <property name="tickPosition">
-             <enum>QSlider::TicksAbove</enum>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+            <property name="checked">
+             <bool>false</bool>
             </property>
            </widget>
           </item>
-          <item row="1" column="0">
+          <item row="0" column="0" colspan="2">
+           <widget class="QPushButton" name="takeImageBtn">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>拍照</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2">
            <widget class="QPushButton" name="takeBackgroundBtn">
             <property name="enabled">
              <bool>false</bool>
@@ -298,7 +285,7 @@
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="2" column="0" colspan="2">
            <widget class="QPushButton" name="recognitionBtn">
             <property name="enabled">
              <bool>true</bool>
@@ -320,7 +307,29 @@
             </property>
            </widget>
           </item>
-          <item row="5" column="0">
+          <item row="3" column="0" colspan="2">
+           <widget class="QPushButton" name="studyBtn">
+            <property name="enabled">
+             <bool>true</bool>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::StrongFocus</enum>
+            </property>
+            <property name="autoFillBackground">
+             <bool>true</bool>
+            </property>
+            <property name="text">
+             <string>学习</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+            <property name="checked">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="2">
            <widget class="QLineEdit" name="name">
             <property name="inputMask">
              <string/>
@@ -333,25 +342,38 @@
             </property>
            </widget>
           </item>
-          <item row="4" column="0">
-           <widget class="QPushButton" name="label_target">
-            <property name="enabled">
-             <bool>true</bool>
-            </property>
-            <property name="focusPolicy">
-             <enum>Qt::StrongFocus</enum>
-            </property>
-            <property name="autoFillBackground">
-             <bool>true</bool>
+          <item row="6" column="0" colspan="2">
+           <widget class="QLabel" name="label">
+            <property name="font">
+             <font>
+              <family>Microsoft YaHei</family>
+              <pointsize>12</pointsize>
+             </font>
             </property>
             <property name="text">
-             <string>标注</string>
+             <string>曝光补偿</string>
             </property>
-            <property name="checkable">
-             <bool>true</bool>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
             </property>
-            <property name="checked">
-             <bool>false</bool>
+           </widget>
+          </item>
+          <item row="7" column="0" colspan="2">
+           <widget class="QSlider" name="exposureCompensation">
+            <property name="minimum">
+             <number>-4</number>
+            </property>
+            <property name="maximum">
+             <number>4</number>
+            </property>
+            <property name="pageStep">
+             <number>2</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="tickPosition">
+             <enum>QSlider::TicksAbove</enum>
             </property>
            </widget>
           </item>

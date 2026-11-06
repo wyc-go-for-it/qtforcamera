@@ -275,12 +275,12 @@ void GLRendererWidget::initializeGL()
     is_init = true;
 }
 
-QRectF mapToWidgetCoords(const QRectF& objRect,
+void mapToWidgetCoords(DetectObject& obj,
     const QSize& imageSize,
-    const QSize& widgetSize)
+    const QSize& widgetSize, QVector<QPointF>& points, QVector<QPointF>& lm_points, QRectF& rect)
 {
     if (imageSize.isEmpty() || widgetSize.isEmpty())
-        return QRectF();
+        return;
 
     // 1. 计算缩放比例 (保持宽高比 Fit)
     float scaleX = static_cast<float>(widgetSize.width()) / imageSize.width();
@@ -295,13 +295,34 @@ QRectF mapToWidgetCoords(const QRectF& objRect,
     float offsetX = (widgetSize.width() - renderW) / 2.0f;
     float offsetY = (widgetSize.height() - renderH) / 2.0f;
 
+    const auto& objRect = obj.rect;
+
     // 4. 将原始图像坐标点映射到 Widget 坐标系
     float x = objRect.x() * scale + offsetX;
     float y = objRect.y() * scale + offsetY;
     float w = objRect.width() * scale;
     float h = objRect.height() * scale;
 
-    return QRectF(x, y, w, h);
+    points.clear();
+    const auto& landmarks = obj.landmarks;
+    for (auto& point : landmarks) {
+        auto x = point.x() * scale + offsetX;
+        auto y = point.y() * scale + offsetY;
+        points.append({ x, y });
+    }
+
+    lm_points.clear();
+    const auto& lm106 = obj.lm106;
+    for (auto& point : lm106) {
+        auto x = point.x() * scale + offsetX;
+        auto y = point.y() * scale + offsetY;
+        lm_points.append({ x, y });
+    }
+
+    rect.setX(x);
+    rect.setY(y);
+    rect.setWidth(w);
+    rect.setHeight(h);
 }
 
 void GLRendererWidget::paintGL()
@@ -422,8 +443,8 @@ void GLRendererWidget::paintGL()
         painter.setBrush(Qt::NoBrush);
         painter.drawPolygon(poly);
 
+        painter.setPen(QPen(Qt::white, 2));
         for (int i = 0; i < 4; ++i) {
-            painter.setPen(QPen(Qt::white, 2));
             painter.setBrush(i == m_draggedIndex ? Qt::yellow : Qt::green);
             painter.drawEllipse(m_points[i], 8, 8);
         }
@@ -433,14 +454,28 @@ void GLRendererWidget::paintGL()
 
         painter.setBrush(Qt::NoBrush);
 
+        QRectF rect;
+        QVector<QPointF> landmarks;
+        QVector<QPointF> lms106;
+
         QMutexLocker l(&mlock);
-        for (const auto& obj : m_currentObjects) {
+        for (auto& obj : m_currentObjects) {
 
             // 将模型输出坐标映射为当前 Widget 尺寸坐标
-            QRectF rect = mapToWidgetCoords(obj.rect, m_actualImageSize, this->size());
+            mapToWidgetCoords(obj, m_actualImageSize, this->size(), landmarks, lms106, rect);
 
             // 绘制矩形框
             painter.drawRect(rect);
+
+            painter.setPen(QPen(Qt::red, 2));
+            for (auto& point : landmarks) {
+                painter.drawPoint(point);
+            }
+
+            painter.setPen(QPen(Qt::white, 2));
+            for (auto& point : lms106) {
+                painter.drawPoint(point);
+            }
 
             // 绘制分类与置信度标签
             QString label = QString("name %1:%2%").arg(obj.name).arg(int(obj.prob * 100));
@@ -574,7 +609,7 @@ QVector<QPointF> GLRendererWidget::loadPoints()
     QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
     QVector<QPointF> points;
 
-    int size = settings.beginReadArray("roi_points");
+    int size = settings.beginReadArray(this->objectName());
     for (int i = 0; i < size; ++i) {
         settings.setArrayIndex(i);
         QPointF pt = settings.value("point").toPointF();
@@ -632,7 +667,7 @@ void GLRendererWidget::savePoints()
 {
     QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
 
-    settings.beginWriteArray("roi_points");
+    settings.beginWriteArray(this->objectName());
     for (int i = 0; i < m_points.size(); ++i) {
         settings.setArrayIndex(i);
         settings.setValue("point", m_points[i]);

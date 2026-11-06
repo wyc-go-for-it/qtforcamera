@@ -77,7 +77,7 @@ bool HandDetector::load_model(const std::string param, const std::string bin)
     }
     loaded = true;
 
-    LOGI("[HandDetector] has loaded/n");
+    LOGI("[HandDetector] has loaded\n");
 
     return true;
 }
@@ -197,6 +197,10 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
 
 void HandDetector::label(const std::string& img_dir, const std::string& label_dir, const std::string& vis_dir, uint32_t& num_files)
 {
+
+    if (!loaded) {
+        return;
+    }
 
     namespace fs = std::filesystem;
 

@@ -32,11 +32,19 @@ struct SearchResult {
 };
 
 class WYCAI_EXPORT ProductDatabase {
+public:
+    explicit ProductDatabase(size_t featureDim)
+    {
+        m_featureDim = featureDim;
+    }
+
 private:
     std::vector<ProductRecord> records;
     cv::Mat featureMatrix;
     std::vector<SearchResult> lastResults;
     uint32_t maxTempId = 0;
+
+    size_t m_featureDim = 0;
 
     // 重新构建内存矩阵
     void rebuildMatrix();
@@ -59,6 +67,11 @@ public:
 
     // 4. 高效检索 Top-K 最相似商品
     std::vector<SearchResult> search(const std::vector<float>& queryFeature, int topK = 3);
+
+    uint32_t size() const
+    {
+        return records.size();
+    }
 };
 
 #endif // PRODUCT_DATABASE_HPP

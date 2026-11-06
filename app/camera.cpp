@@ -50,6 +50,7 @@
 
 #include "camera.h"
 #include "CustomGLSurface.h"
+#include "facedialog.h"
 #include "glrendererwidget.h"
 #include "goodsdelegate.h"
 #include "goodsmodel.h"
@@ -83,6 +84,7 @@ Camera::Camera()
 
     initDevices();
 
+#ifdef Q_OS_WIN
     connect(ui->label_target, &QAbstractButton::clicked, this, []() {
         QProgressDialog dialog;
         dialog.setLabelText("正在标注....");
@@ -90,7 +92,7 @@ Camera::Camera()
         QThreadPool::globalInstance()->start([&dialog]() {
             HandDetector detector;
 
-            detector.load_model("./ncnn_models/yolo11n_hand.param", "./ncnn_models/yolo11n_hand.bin");
+            detector.load_model("./ncnn_models/yolo11n_hand_320.param", "./ncnn_models/yolo11n_hand_320.bin");
 
             std::string img_dir = "./test_label/frames";
             std::string label_dir = "./label_dir";
@@ -105,6 +107,15 @@ Camera::Camera()
             dialog.accept();
         });
 
+        dialog.exec();
+    });
+#else
+    ui->label_target->setVisible(false);
+#endif
+
+    connect(ui->face, &QAbstractButton::clicked, this, [this]() {
+        FaceDialog dialog(this);
+        dialog.updateGLSurface(m_glSurface.data(), m_cameraInfo);
         dialog.exec();
     });
 
@@ -212,6 +223,8 @@ void Camera::initDevices()
 
 void Camera::setCamera(const QCameraInfo& cameraInfo)
 {
+    m_cameraInfo = cameraInfo;
+
     {
         QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
         settings.beginGroup("camera");
@@ -252,7 +265,7 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
 
     {
         m_glWindow = new GLRendererWidget();
-
+        m_glWindow->setObjectName("main");
         m_glWindow->setMirrored(cameraInfo.position());
         m_glWindow->setRotation(cameraInfo.orientation());
 

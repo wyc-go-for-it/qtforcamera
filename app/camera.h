@@ -59,6 +59,7 @@
 #include <QScopedPointer>
 
 #include <CustomGLSurface.h>
+#include <QCameraInfo>
 #include <QMainWindow>
 
 QT_BEGIN_NAMESPACE
@@ -156,6 +157,8 @@ private:
     QScopedPointer<CustomGLSurface> m_glSurface;
     GLRendererWidget* m_glWindow;
     QScopedPointer<QWidget> m_glContainer;
+
+    QCameraInfo m_cameraInfo;
 };
 
 #endif

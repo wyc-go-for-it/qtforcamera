@@ -111,7 +111,7 @@ void ROIViewfinder::savePoints()
 {
     QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
 
-    settings.beginWriteArray("roi_points");
+    settings.beginWriteArray(this->objectName());
     for (int i = 0; i < m_points.size(); ++i) {
         settings.setArrayIndex(i);
         settings.setValue("point", m_points[i]);
@@ -124,7 +124,7 @@ QVector<QPointF> ROIViewfinder::loadPoints()
     QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
     QVector<QPointF> points;
 
-    int size = settings.beginReadArray("roi_points");
+    int size = settings.beginReadArray(this->objectName());
     for (int i = 0; i < size; ++i) {
         settings.setArrayIndex(i);
         QPointF pt = settings.value("point").toPointF();

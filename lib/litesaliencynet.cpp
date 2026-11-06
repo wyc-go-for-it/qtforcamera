@@ -95,10 +95,10 @@ std::pair<cv::Mat, cv::Mat> LiteSaliencyNet::liteSaliencyCropROI(const cv::Mat& 
 
     productMask = mask;
 
-    cv::Mat labels, stats, centroids;
-    int num_labels = cv::connectedComponentsWithStats(productMask, labels, stats, centroids, 8, CV_32S);
+    // cv::Mat labels, stats, centroids;
+    // int num_labels = cv::connectedComponentsWithStats(productMask, labels, stats, centroids, 8, CV_32S);
 
-    LOGI("共发现<%d>个潜在区域\n", num_labels - 1);
+    // LOGI("共发现<%d>个潜在区域\n", num_labels - 1);
 
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(productMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
