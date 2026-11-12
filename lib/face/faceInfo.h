@@ -14,6 +14,7 @@ struct FaceInfo {
     cv::Mat aligned;
     std::vector<cv::Point2f> lm106;
     cv::Mat M;
+    bool is_real;
 
 private:
     enum class StatusBit : std::size_t {

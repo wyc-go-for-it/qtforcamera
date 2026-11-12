@@ -489,11 +489,10 @@ float ProductFeatureEngine::computeSimilarity(const std::vector<float>& vecA, co
 
 std::vector<float> ProductFeatureEngine::extractFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text)
 {
-    bool cv = false;
-    if (cv) {
+    if (m_modelParam.empty() || m_modelBin.empty()) {
         return fuseFeatures(roi, croppedMask, text);
     } else {
-        return mobileNetFeatures(roi, croppedMask);
+        return mobileNetFeatures(roi, croppedMask, m_modelParam, m_modelBin);
     }
 }
 
@@ -520,7 +519,7 @@ std::vector<float> ProductFeatureEngine::fuseFeatures(const cv::Mat& roi, const 
     return fused;
 }
 
-std::vector<float> ProductFeatureEngine::mobileNetFeatures(const cv::Mat& roi, const cv::Mat& croppedMask)
+std::vector<float> ProductFeatureEngine::mobileNetFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string param, const std::string bin)
 {
     static ncnn::Net net;
     static bool loaded = false;
@@ -550,10 +549,14 @@ std::vector<float> ProductFeatureEngine::mobileNetFeatures(const cv::Mat& roi, c
 
         net.opt.lightmode = true;
 
-        if (net.load_param("./ncnn_models/mobilenet_v3_small_embedding.ncnn.param") != 0)
+        if (net.load_param(param.c_str()) != 0) {
+            LOGE("[mobileNetFeatures] load_param failed: %s\n", param.c_str());
             return {};
-        if (net.load_model("./ncnn_models/mobilenet_v3_small_embedding.ncnn.bin") != 0)
+        }
+        if (net.load_model(bin.c_str()) != 0) {
+            LOGE("[mobileNetFeatures] load_model failed: %s\n", bin.c_str());
             return {};
+        }
 
         LOGI("mobileNetFeatures model loaded from file\n");
     }

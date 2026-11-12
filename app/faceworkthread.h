@@ -29,9 +29,10 @@ public slots:
     void onQueriedFace(bool recog, const QString& name);
     void onUpdateVertex(QVector<QPointF> points, QCamera::Position pos, qint32 rotationAngle);
     void onExtractFeature();
+    void onRandomTest();
 
 signals:
-    void captured(const QImage& frame, const QImage& alinged);
+    void captured(const QImage& frame, const QImage& self, const QImage& alinged);
     void error(const QString& error);
     void detected(const QVector<DetectObject>& objects);
 
@@ -45,10 +46,13 @@ private:
 
     Q_INVOKABLE void handleFrame();
     Q_INVOKABLE void extractFeature(const QFileInfo& fileInfo);
+    Q_INVOKABLE void testFace();
 
     void initFaceModel();
 
     QString faceDataDir();
+
+    void testSimilarity(const cv::Mat& base_img, const cv::Mat& test_img, const QString& test_name);
 
 private:
     QThread m_thread;

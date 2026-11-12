@@ -92,7 +92,7 @@ Camera::Camera()
         QThreadPool::globalInstance()->start([&dialog]() {
             HandDetector detector;
 
-            detector.load_model("./ncnn_models/yolo11n_hand_320.param", "./ncnn_models/yolo11n_hand_320.bin");
+            detector.load_model("./ncnn_models/yolo26n_hand_320.param", "./ncnn_models/yolo26n_hand_320.bin");
 
             std::string img_dir = "./test_label/frames";
             std::string label_dir = "./label_dir";
@@ -115,7 +115,7 @@ Camera::Camera()
 
     connect(ui->face, &QAbstractButton::clicked, this, [this]() {
         FaceDialog dialog(this);
-        dialog.updateGLSurface(m_glSurface.data(), m_cameraInfo);
+        dialog.updateGLSurface(m_camera.data(), m_cameraInfo);
         dialog.exec();
     });
 

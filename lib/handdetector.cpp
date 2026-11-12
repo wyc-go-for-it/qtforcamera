@@ -144,7 +144,7 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
     if (ex.extract("out0", out) != 0)
         return results;
     if (out.w != 2100 || out.h != 5) {
-        LOGE("unexpected out: w=%d h=%d", out.w, out.h);
+        LOGE("unexpected out: w=%d h=%d\n", out.w, out.h);
         return results;
     }
 

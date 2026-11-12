@@ -15,6 +15,7 @@ set(HEADER
     glrendererwidget.h
     facedialog.h
     faceworkthread.h
+    filepickerdialog.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -34,6 +35,7 @@ set(SOURCES
     glrendererwidget.cpp
     facedialog.cpp
     faceworkthread.cpp
+    filepickerdialog.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -88,7 +90,6 @@ else()
             ${PROJECT_SOURCES}
             ${OCR_CORE_SRCS}
             ${RESOURCES}
-            filepickerdialog.h filepickerdialog.cpp
         )
     endif()
 endif()

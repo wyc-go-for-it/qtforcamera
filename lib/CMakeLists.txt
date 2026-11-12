@@ -5,7 +5,7 @@ endif()
 
 option(ENABLE_LOG "Enable runtime logs" ON)
 
-set(hasStatic ON CACHE BOOL "Enable static build" FORCE)
+set(hasStatic OFF CACHE BOOL "Enable static build" FORCE)
 
 set(HEADER
     productfeatureengine.h
@@ -86,6 +86,8 @@ add_library(${TARGET_NAME} SHARED
     face/faceengine.h face/faceengine.cpp
     face/facelandmark.h face/facelandmark.cpp
     face/faceInfo.h
+    face/imageaugmentor.h face/imageaugmentor.cpp
+    face/silentfaceantispoofing.h face/silentfaceantispoofing.cpp
  )
 
 set(OPENCV_DLL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/opencv2")

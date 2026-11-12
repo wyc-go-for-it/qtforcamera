@@ -27,14 +27,6 @@
 #define LOGE(...) ((void)0)
 #endif
 
-// static const float STANDARD_LANDMARKS[5][2] = {
-//     { 38.2946f, 51.6963f }, // 左眼
-//     { 73.5318f, 51.5014f }, // 右眼
-//     { 56.0252f, 71.7366f }, // 鼻尖
-//     { 41.5493f, 92.3655f }, // 左嘴角
-//     { 70.7299f, 92.2041f } // 右嘴角
-// };
-
 static float iou(const cv::Rect_<float>& a, const cv::Rect_<float>& b)
 {
     float xx1 = std::max(a.x, b.x);
@@ -77,8 +69,6 @@ static std::vector<FaceInfo> nms_faces(std::vector<FaceInfo>& faces, float iou_t
         out.push_back(faces[idx]);
     return out;
 }
-
-// ============ 类实现 ============
 
 FaceEngine::FaceEngine() { }
 FaceEngine::~FaceEngine() { }
@@ -162,6 +152,11 @@ bool FaceEngine::loadLmModel(const std::string& param, const std::string& bin)
     return lm_engine.load_model(param, bin);
 }
 
+bool FaceEngine::loadSilentFaceAntiSpoofingModel(const std::string& param, const std::string& bin)
+{
+    return m_silentFaceAntiSpoofing.load_model(param, bin);
+}
+
 std::vector<FaceInfo> FaceEngine::detectFace(const cv::Mat& frame)
 {
     std::vector<FaceInfo> faces;
@@ -220,14 +215,18 @@ std::vector<FaceInfo> FaceEngine::detectFace(const cv::Mat& frame)
 
     // 对齐
     for (auto& f : final_faces) {
+        auto spoof_res = m_silentFaceAntiSpoofing.detect(img, f.rect);
+        if (spoof_res.is_real) {
+            lm_engine.check106(img, f);
 
-        lm_engine.check106(img, f);
+            f.aligned = img; // 用于后续特征值提取
+        }
 
-        f.aligned = img; // 用于后续特征值提取
+        f.is_real = spoof_res.is_real;
 
         auto t2 = std::chrono::high_resolution_clock::now();
 
-        // LOGI("【detectFace分析】detect_face=%.2fdms ,detect106=%.2fms,score:%.2f\n", std::chrono::duration<double, std::milli>(t1 - t0).count(),
+        // LOGI("【detectFace分析】detect_face=%.2fdms ,check106=%.2fms,score:%.2f\n", std::chrono::duration<double, std::milli>(t1 - t0).count(),
         //     std::chrono::duration<double, std::milli>(t2 - t1).count(), f.score);
     }
     return final_faces;

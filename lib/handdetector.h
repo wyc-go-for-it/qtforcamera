@@ -27,7 +27,7 @@ public:
     bool load_model(const std::string param, const std::string bin);
 
     std::vector<Detection> detect(const cv::Mat& bgr,
-        float conf_thresh = 0.60f,
+        float conf_thresh = 0.70f,
         float iou_thresh = 0.45f);
 
     void label(const std::string& img_dir, const std::string& label_dir, const std::string& vis_dir, uint32_t& num_files);

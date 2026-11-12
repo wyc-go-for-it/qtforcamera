@@ -6,7 +6,10 @@
 #include <QDir>
 #include <QStandardPaths>
 #include <face/FaceEngine.h>
+#include <face/ImageAugmentor.h>
+#include <filesystem>
 #include <opencv2/core/mat.hpp>
+#include <random>
 
 FaceWorkThread::FaceWorkThread(QObject* parent)
     : QObject(parent)
@@ -90,8 +93,130 @@ void FaceWorkThread::onExtractFeature()
     QMetaObject::invokeMethod(this, "extractFeature", Qt::QueuedConnection, Q_ARG(QFileInfo, QFileInfo()));
 }
 
+void FaceWorkThread::onRandomTest()
+{
+    QMetaObject::invokeMethod(this, "testFace", Qt::QueuedConnection);
+}
+
+void FaceWorkThread::testSimilarity(const cv::Mat& base_img, const cv::Mat& test_img, const QString& test_name)
+{
+    auto base_faceLst = m_faceDetector->detectFace(base_img);
+    auto test_faceLst = m_faceDetector->detectFace(test_img);
+
+    if (base_faceLst.empty() || test_faceLst.empty()) {
+        emit info(test_name + "，未发现查询人脸信息");
+        return;
+    }
+
+    m_faceDetector->extract_feature(base_faceLst.at(0));
+    auto base_feat = base_faceLst.at(0).feature;
+
+    m_faceDetector->extract_feature(test_faceLst.at(0));
+    auto test_feat = test_faceLst.at(0).feature;
+
+    emit captured(ImageUtils::matToQImage(base_img), ImageUtils::matToQImage(test_img), ImageUtils::matToQImage(base_faceLst.at(0).aligned));
+
+    if (base_feat.empty() || test_feat.empty()) {
+        emit info("[" + test_name + "] ❌ 无法提取特征 (可能人脸检测失败)");
+        return;
+    }
+
+    float sim = FaceEngine::cosine_similarity(base_feat, test_feat);
+
+    qInfo() << QString("[%1-15s] 相似度: %2").arg(test_name).arg(sim);
+
+    emit info(QString("[%1-15s] 相似度: %2").arg(test_name).arg(sim));
+
+    QThread::msleep(500);
+}
+
+void FaceWorkThread::testFace()
+{
+
+    namespace fs = std::filesystem;
+
+    const auto src_dir_path = "./all_faces";
+
+    qInfo() << "========== 开始鲁棒性测试 ==========";
+
+    static bool is_init = false;
+    static size_t index = 0;
+    static std::vector<std::string> base_img_files, test_img_files;
+
+    if (!is_init) {
+        for (const auto& entry : fs::directory_iterator(src_dir_path)) {
+            if (entry.is_regular_file()) {
+                std::string ext = entry.path().extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp") {
+                    base_img_files.push_back(entry.path().string());
+                    test_img_files.push_back(entry.path().string());
+                }
+            }
+        }
+
+        std::random_device rd;
+        std::default_random_engine eng(rd());
+        std::shuffle(base_img_files.begin(), base_img_files.end(), eng);
+        std::shuffle(test_img_files.begin(), test_img_files.end(), eng);
+
+        is_init = true;
+    }
+
+    if (index > base_img_files.size())
+        return;
+
+    const cv::Mat base_raw = cv::imread(base_img_files.at(index++));
+
+    const cv::Mat test_raw = cv::imread(test_img_files.at(test_img_files.size() - index - 1));
+
+    // 基准图与自己的测试 (分数应该接近 1.0)
+    testSimilarity(base_raw, test_raw, "基准图 vs 基准图");
+
+    // 2. 亮度测试
+    testSimilarity(base_raw, ImageAugmentor::adjustBrightness(test_raw, 50), "亮度+50(偏亮)");
+    testSimilarity(base_raw, ImageAugmentor::adjustBrightness(test_raw, -50), "亮度-50(偏暗)");
+    testSimilarity(base_raw, ImageAugmentor::adjustBrightness(test_raw, -80), "亮度-80(极暗)");
+
+    // 3. 对比度测试
+    testSimilarity(base_raw, ImageAugmentor::adjustContrast(test_raw, 0.5f), "对比度0.5(灰)");
+    testSimilarity(base_raw, ImageAugmentor::adjustContrast(test_raw, 1.5f), "对比度1.5(强)");
+
+    // 4. Gamma 测试 (模拟不同相机的感光曲线)
+    testSimilarity(base_raw, ImageAugmentor::adjustGamma(test_raw, 0.6), "Gamma0.6(提暗)");
+    testSimilarity(base_raw, ImageAugmentor::adjustGamma(test_raw, 1.5), "Gamma1.5(压暗)");
+
+    // 5. 颜色/色温测试
+    testSimilarity(base_raw, ImageAugmentor::adjustHSV(test_raw, 15, 1.0f, 1.0f), "色相偏移(偏色)");
+    testSimilarity(base_raw, ImageAugmentor::adjustHSV(test_raw, 0, 0.5f, 1.0f), "低饱和度(褪色)");
+
+    // 6. 画质模糊/噪声测试
+    testSimilarity(base_raw, ImageAugmentor::addGaussianNoise(test_raw, 0, 15), "高斯噪声(std=15)");
+    testSimilarity(base_raw, ImageAugmentor::addBlur(test_raw, 5), "高斯模糊(5x5)");
+
+    // 7. 几何变换测试 (★ 核心：考验对齐算法)
+    testSimilarity(base_raw, ImageAugmentor::rotate(test_raw, 15.0f), "向右旋转15度");
+    testSimilarity(base_raw, ImageAugmentor::rotate(test_raw, -15.0f), "向左旋转15度");
+    testSimilarity(base_raw, ImageAugmentor::scale(test_raw, 0.4f), "缩放0.4(偏远)");
+
+    // 8. 组合蹂躏测试 (模拟地狱环境)
+    cv::Mat hell_img = ImageAugmentor::adjustBrightness(test_raw, -40);
+    hell_img = ImageAugmentor::addBlur(hell_img, 3);
+    hell_img = ImageAugmentor::addGaussianNoise(hell_img, 0, 10);
+    testSimilarity(base_raw, hell_img, "暗光+模糊+噪声");
+
+    qInfo() << "========== 测试结束 ==========";
+
+    onRandomTest();
+}
+
 void FaceWorkThread::registerFace(const cv::Mat& cur_fg, const QString& name)
 {
+    if (name.isEmpty() && m_name.isEmpty()) {
+        emit error("名字不能为空");
+        return;
+    }
+
     std::vector<FaceInfo> faces = m_faceDetector->detectFace(cur_fg);
     if (faces.size() != 1) {
         emit info("一次只能注册一个人");
@@ -111,7 +236,11 @@ void FaceWorkThread::registerFace(const cv::Mat& cur_fg, const QString& name)
         QImage qimg(ImageUtils::matToQImage(cur_fg));
         qimg.save(filePath, "JPG");
 
-        emit captured(qimg, ImageUtils::matToQImage(faces.at(0).aligned));
+        filePath = faceDataDir() + "/" + QString::fromStdString(faceRecord.name) + "_aligned.jpg";
+        QImage aligned(ImageUtils::matToQImage(faces.at(0).aligned));
+        aligned.save(filePath, "JPG");
+
+        emit captured(qimg, qimg, aligned);
     }
     m_name.clear();
 }
@@ -129,11 +258,12 @@ void FaceWorkThread::queryFace(const cv::Mat& cur_fg)
 {
     cv::Mat cur_data = cur_fg;
     if (!m_name.isEmpty()) {
-        cur_data = addGaussianNoise(cv::imread(m_name.toLocal8Bit().toStdString()), 5, 10);
+        cur_data = cv::imread(m_name.toLocal8Bit().toStdString());
     }
 
     std::vector<FaceInfo> faces = m_faceDetector->detectFace(cur_data);
     if (faces.empty()) {
+        emit captured(ImageUtils::matToQImage(cur_data), QImage(), QImage());
         emit info("未发现查询人脸信息");
     } else {
         m_faceDetector->extract_feature(faces.at(0));
@@ -148,11 +278,15 @@ void FaceWorkThread::queryFace(const cv::Mat& cur_fg)
         } else {
             emit info(QString("搜索耗时<%3ms>,识别人脸信息《%1》，相似度得分:%2").arg(QString::fromStdString(results.at(0).name)).arg(results.at(0).similarity).arg(t.elapsed()));
 
-            const auto name = QString("%1/%2.jpg").arg(faceDataDir(), QString::fromStdString(results.at(0).name));
+            auto name = QString("%1/%2.jpg").arg(faceDataDir(), QString::fromStdString(results.at(0).name));
 
-            auto bg = cv::imread(name.toLocal8Bit().toStdString());
+            auto reg_data = cv::imread(name.toLocal8Bit().toStdString());
 
-            emit captured(ImageUtils::matToQImage(cur_data), ImageUtils::matToQImage(bg));
+            name = QString("%1/%2_aligned.jpg").arg(faceDataDir(), QString::fromStdString(results.at(0).name));
+
+            auto aligned = cv::imread(name.toLocal8Bit().toStdString());
+
+            emit captured(ImageUtils::matToQImage(cur_data), ImageUtils::matToQImage(reg_data), ImageUtils::matToQImage(aligned));
         }
     }
 }
@@ -253,6 +387,10 @@ void FaceWorkThread::handleFrame()
             detectObject.reserve(faces.size());
 
             for (const auto& obj : faces) {
+
+                if (!obj.is_real) {
+                    emit error("请使用真人");
+                }
 
                 if (obj.isMouthOpen()) {
                     emit error("警告：张嘴了");
@@ -393,7 +531,10 @@ void FaceWorkThread::initFaceModel()
 
     std::string lm_path = WorkThread::ensureModelFile(":/models/models/2d106det.ncnn", "2d106det.ncnn").toStdString();
 
+    std::string silentFace_path = WorkThread::ensureModelFile(":/models/models/MiniFASNetV2.ncnn", "MiniFASNetV2.ncnn").toStdString();
+
     m_faceDetector->loadDetModel(det_path + ".param", det_path + ".bin");
     m_faceDetector->loadRecModel(rec_path + ".param", rec_path + ".bin");
     m_faceDetector->loadLmModel(lm_path + ".param", lm_path + ".bin");
+    m_faceDetector->loadSilentFaceAntiSpoofingModel(silentFace_path + ".param", silentFace_path + ".bin");
 }

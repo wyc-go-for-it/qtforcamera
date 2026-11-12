@@ -116,6 +116,31 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="test">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>45</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>128</width>
+         <height>45</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Microsoft YaHei</family>
+         <pointsize>12</pointsize>
+        </font>
+       </property>
+       <property name="text">
+        <string>随机图片测试</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="select_file">
        <property name="minimumSize">
         <size>
@@ -149,6 +174,25 @@
      </property>
      <item>
       <widget class="QLabel" name="contrast_img">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="frameShape">
+        <enum>QFrame::Box</enum>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="reg_img">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Ignored" vsizetype="Ignored">
          <horstretch>0</horstretch>
@@ -231,7 +275,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="register_vip">
+      <widget class="QPushButton" name="register_face">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -251,12 +295,12 @@
         </font>
        </property>
        <property name="text">
-        <string>注册会员</string>
+        <string>注册人脸</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="query_vip">
+      <widget class="QPushButton" name="query_face">
        <property name="minimumSize">
         <size>
          <width>0</width>
@@ -276,7 +320,7 @@
         </font>
        </property>
        <property name="text">
-        <string>查询会员</string>
+        <string>查询人脸</string>
        </property>
       </widget>
      </item>

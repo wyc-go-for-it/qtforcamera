@@ -328,17 +328,17 @@ bool Yolo11Ncnn::detect_modelB(const cv::Mat& bgr, std::vector<Object>& objects,
     proposal_objects.reserve(256);
 
     for (int j = 0; j < num_anchors; j++) {
-        // 找最大类别分数（网络里已经 Sigmoid，不要再做）
+
         int label = 0;
         float score = rows[4 + 0][j];
 
-        // for (int c = 0; c < num_classes; c++) {
-        //     float s = rows[4 + c][j];
-        //     if (s > score) {
-        //         score = s;
-        //         label = c;
-        //     }
-        // }
+        for (int c = 0; c < num_classes; c++) {
+            float s = rows[4 + c][j];
+            if (s > score) {
+                score = s;
+                label = c;
+            }
+        }
 
         if (score < conf_thresh)
             continue;

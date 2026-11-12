@@ -1,6 +1,7 @@
 #ifndef FACEENGINE_H
 #define FACEENGINE_H
 
+#include "face/SilentFaceAntiSpoofing.h"
 #pragma once
 
 #include <ncnn/net.h>
@@ -26,6 +27,7 @@ public:
     bool loadDetModel(const std::string& param, const std::string& bin);
     bool loadRecModel(const std::string& param, const std::string& bin);
     bool loadLmModel(const std::string& param, const std::string& bin);
+    bool loadSilentFaceAntiSpoofingModel(const std::string& param, const std::string& bin);
 
     std::vector<FaceInfo> detectFace(const cv::Mat& img);
     void extract_feature(FaceInfo& face);
@@ -63,5 +65,6 @@ private:
     bool loaded = false;
 
     FaceLandmark lm_engine;
+    SilentFaceAntiSpoofing m_silentFaceAntiSpoofing;
 };
 #endif // FACEENGINE_H

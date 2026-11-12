@@ -19,21 +19,23 @@ public:
     explicit FaceDialog(QWidget* parent = nullptr);
     ~FaceDialog();
 
-    void updateGLSurface(CustomGLSurface* gl, const QCameraInfo& cameraInfo);
+    void updateGLSurface(QCamera* camera, const QCameraInfo& cameraInfo);
 
 private slots:
-    void on_register_vip_clicked();
+    void on_register_face_clicked();
 
-    void on_query_vip_clicked();
+    void on_query_face_clicked();
 
     void on_extract_feature_clicked();
 
     void on_select_file_clicked();
 
+    void on_test_clicked();
+
 private:
     Ui::FaceDialog* ui;
 
-    QPointer<CustomGLSurface> m_customGLSurface;
+    QPointer<QCamera> m_camera;
     QScopedPointer<QWidget> m_glContainer;
     GLRendererWidget* m_glWindow;
 

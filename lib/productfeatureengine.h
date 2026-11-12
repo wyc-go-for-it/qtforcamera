@@ -14,6 +14,12 @@ struct WYCAI_EXPORT FeatureWeights {
 
 class WYCAI_EXPORT ProductFeatureEngine {
 public:
+    ProductFeatureEngine(const std::string& param, const std::string& bin)
+        : m_modelParam(param)
+        , m_modelBin(bin) {
+
+        };
+
     /**
      * @brief 1. 背景差分并自动裁剪商品 ROI 区域
      */
@@ -33,10 +39,11 @@ public:
      */
     static float computeSimilarity(const std::vector<float>& vecA, const std::vector<float>& vecB);
 
-    static std::vector<float> extractFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text);
+    std::vector<float> extractFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text);
 
 private:
-    ProductFeatureEngine();
+    const std::string m_modelParam;
+    const std::string m_modelBin;
 
     /**
      * @brief fuseFeatures 多模态特征拼接融合函数
@@ -48,7 +55,7 @@ private:
      */
     static std::vector<float> fuseFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string& text, float wVisual = 1.0f, float wText = 0.20f);
 
-    static std::vector<float> mobileNetFeatures(const cv::Mat& roi, const cv::Mat& croppedMask);
+    static std::vector<float> mobileNetFeatures(const cv::Mat& roi, const cv::Mat& croppedMask, const std::string param, const std::string bin);
     /**
      * @brief 5. 组合主函数：提取 VISUAL_DIM 维复合归一化特征向量
      */
