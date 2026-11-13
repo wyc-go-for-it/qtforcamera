@@ -1,7 +1,3 @@
-if(ANDROID)
-    set(QT_ANDROID_PACKAGE_SOURCE_DIR "\"android-package-source-directory\": \"${CMAKE_CURRENT_SOURCE_DIR}/android\"," CACHE STRING "" FORCE)
-endif()
-
 set(HEADER
     camera.h
     imagesettings.h
@@ -16,6 +12,7 @@ set(HEADER
     facedialog.h
     faceworkthread.h
     filepickerdialog.h
+    frameconverter.h
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.h)
@@ -36,6 +33,7 @@ set(SOURCES
     facedialog.cpp
     faceworkthread.cpp
     filepickerdialog.cpp
+     frameconverter.cpp
 )
 if(ANDROID)
     list(APPEND HEADER androidUtils/localandroidutils.cpp)
@@ -76,20 +74,20 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     )
 else()
     if(ANDROID)
+
+        set(QT_ANDROID_PACKAGE_SOURCE_DIR "\"android-package-source-directory\": \"${CMAKE_CURRENT_SOURCE_DIR}/android\"," CACHE STRING "" FORCE)
+
         add_library(qtforcamera SHARED
             ${PROJECT_SOURCES}
             ${OCR_CORE_SRCS}
             ${RESOURCES}
-        )
-        set_target_properties(qtforcamera PROPERTIES
-            QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
-            # ANDROID_EXTRA_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/libs/libcustom.so"
         )
     else()
         add_executable(qtforcamera
             ${PROJECT_SOURCES}
             ${OCR_CORE_SRCS}
             ${RESOURCES}
+
         )
     endif()
 endif()

@@ -78,6 +78,9 @@ Camera::Camera()
     : ui(new Ui::Camera)
     , mWorkThread(new WorkThread())
 {
+    setAttribute(Qt::WA_DeleteOnClose);
+    setAttribute(Qt::WA_AcceptTouchEvents, true);
+
     ui->setupUi(this);
 
     initDir();
@@ -116,6 +119,10 @@ Camera::Camera()
     connect(ui->face, &QAbstractButton::clicked, this, [this]() {
         FaceDialog dialog(this);
         dialog.updateGLSurface(m_camera.data(), m_cameraInfo);
+#ifdef Q_OS_ANDROID
+        dialog.resize(qApp->screens().at(0)->availableSize());
+        dialog.setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+#endif
         dialog.exec();
     });
 
@@ -176,6 +183,7 @@ Camera::Camera()
 
 Camera::~Camera()
 {
+    qApp->quit();
 }
 
 void Camera::initDir()
@@ -247,7 +255,11 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
                 m_glWindow->updateImageSize(frame.size());
             }
 
-            mWorkThread->onVideoFrameChanged(frame);
+            auto data = FrameConverter::convert(frame);
+
+            mWorkThread->onVideoFrameChanged(data);
+
+            m_glWindow->updateFrameOpt(data);
         });
     }
 
@@ -269,7 +281,7 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
         m_glWindow->setMirrored(cameraInfo.position());
         m_glWindow->setRotation(cameraInfo.orientation());
 
-        m_glSurface.reset(new CustomGLSurface());
+        // m_glSurface.reset(new CustomGLSurface());
         m_glContainer.reset(QWidget::createWindowContainer(m_glWindow));
 
         m_glContainer->setObjectName("m_glContainer");
@@ -279,9 +291,9 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
         ui->viewfinderPage->layout()->setMargin(0);
         ui->viewfinderPage->layout()->addWidget(m_glContainer.data());
 
-        connect(m_glSurface.data(), &CustomGLSurface::frameAvailable, m_glWindow, &GLRendererWidget::updateFrame);
+        // connect(m_glSurface.data(), &CustomGLSurface::frameAvailable, m_glWindow, &GLRendererWidget::updateFrame);
 
-        m_camera->setViewfinder(m_glSurface.data());
+        // m_camera->setViewfinder(m_glSurface.data());
 
         connect(mWorkThread.data(), &WorkThread::detected, m_glWindow, &GLRendererWidget::updateCurrentObjects, Qt::QueuedConnection);
     }
@@ -301,9 +313,18 @@ void Camera::setCamera(const QCameraInfo& cameraInfo)
         QSettings settings("./config/hz_config", QSettings::Format::IniFormat);
         settings.beginGroup("camera");
 
-        qDebug() << "resolution:" << settings.value("resolution");
+        auto resolution = settings.value("resolution", QSize(640, 480)).toSize();
 
-        m_imageSettings.setResolution(settings.value("resolution", QSize(640, 480)).toSize());
+        qDebug() << "resolution:" << resolution;
+
+        m_imageSettings.setResolution(resolution);
+
+        auto viewfinderSettings = m_camera->viewfinderSettings();
+        viewfinderSettings.setResolution(resolution);
+        viewfinderSettings.setPixelFormat(QVideoFrame::Format_Jpeg); // MJPG
+        viewfinderSettings.setMinimumFrameRate(30.0);
+        viewfinderSettings.setMaximumFrameRate(30.0);
+        m_camera->setViewfinderSettings(viewfinderSettings);
 
         settings.endGroup();
 
@@ -436,6 +457,10 @@ void Camera::configureImageSettings()
             settings.beginGroup("camera");
             settings.setValue("resolution", m_imageSettings.resolution());
             settings.endGroup();
+
+            auto viewfinderSettings = m_camera->viewfinderSettings();
+            viewfinderSettings.setResolution(m_imageSettings.resolution());
+            m_camera->setViewfinderSettings(viewfinderSettings);
         }
 
         isFirstFrame = false;

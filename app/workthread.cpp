@@ -84,15 +84,20 @@ void WorkThread::studying(const ProductRecord& record)
     isStudied.storeRelaxed(true);
 }
 
-void WorkThread::onVideoFrameChanged(const QVideoFrame& frame)
+void WorkThread::onVideoFrameChanged(const FrameData& frame)
 {
     if (!frame.isValid())
         return;
 
     {
+        QElapsedTimer t;
+        t.start();
+
+        auto tImage = FrameConverter::toImage(frame).copy();
+
         QMutexLocker l(&m_lock);
         m_curIndex = (m_curIndex + 1) & (FRAME_LST_SIZE - 1);
-        m_frame_lst[m_curIndex] = frame;
+        m_frame_lst[m_curIndex] = tImage;
     }
 
     if (!m_hanlde_frame.exchange(true)) {
@@ -221,53 +226,48 @@ void WorkThread::initDir()
     dir.mkpath(ncnnModelDir());
 }
 
-cv::Mat WorkThread::cropVideoFrame(QVideoFrame& frame)
+cv::Mat WorkThread::cropVideoFrame(const QImage& frame)
 {
     cv::Rect roi = m_cropRect;
 
-    if (!frame.isValid() || roi.width <= 0 || roi.height <= 0)
+    if (frame.isNull() || roi.width <= 0 || roi.height <= 0)
         return cv::Mat();
 
     cv::Mat croppedMat;
 
-    if (frame.map(QAbstractVideoBuffer::ReadOnly)) {
+    int height = frame.height();
+    int width = frame.width();
 
-        int height = frame.height();
-        int width = frame.width();
+    auto real = frame;
 
-        auto real = frame.image();
-
-        frame.unmap();
-
-        if (m_mirrored == QCamera::FrontFace) {
-            real = real.mirrored();
-        }
-
-        cv::Mat fullFrame = ImageUtils::qImageToMat(real);
-
-        cv::Mat rotationFrame;
-
-        auto rotaition = ((m_rotationAngle % 360) + 360) % 360;
-
-        switch (rotaition) {
-        case 90:
-            cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_90_COUNTERCLOCKWISE);
-            std::swap(width, height);
-            break;
-        case 180:
-            cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_180);
-            break;
-        case 270:
-            cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_90_CLOCKWISE);
-            std::swap(width, height);
-            break;
-        default:
-            rotationFrame = fullFrame;
-            break;
-        }
-
-        croppedMat = rotationFrame(roi & cv::Rect(0, 0, width, height)).clone();
+    if (m_mirrored == QCamera::FrontFace) {
+        real = real.mirrored();
     }
+
+    cv::Mat fullFrame = ImageUtils::qImageToMat(real);
+
+    cv::Mat rotationFrame;
+
+    auto rotaition = ((m_rotationAngle % 360) + 360) % 360;
+
+    switch (rotaition) {
+    case 90:
+        cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_90_COUNTERCLOCKWISE);
+        std::swap(width, height);
+        break;
+    case 180:
+        cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_180);
+        break;
+    case 270:
+        cv::rotate(fullFrame, rotationFrame, cv::RotateFlags::ROTATE_90_CLOCKWISE);
+        std::swap(width, height);
+        break;
+    default:
+        rotationFrame = fullFrame;
+        break;
+    }
+
+    croppedMat = rotationFrame(roi & cv::Rect(0, 0, width, height)).clone();
 
     return croppedMat;
 }
@@ -309,7 +309,10 @@ QString WorkThread::ensureModelFile(const QString& qrcPath, const QString& fileN
 
         QString paramTargetPath = targetPath + param;
         if (!QFile::exists(paramTargetPath)) {
-            QFile::copy(qrcPath + param, paramTargetPath);
+            bool copy = QFile::copy(qrcPath + param, paramTargetPath);
+
+            qDebug() << "copy:" << copy << "qrcPath + param:" << qrcPath + param << "paramTargetPath:" << paramTargetPath;
+
             QFile::setPermissions(paramTargetPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
         }
 
@@ -362,17 +365,17 @@ void WorkThread::initYoloModel()
 
 void WorkThread::handleFrame()
 {
-    QVideoFrame snapshot;
+    QImage snapshot;
     {
         QMutexLocker l(&m_lock);
         snapshot = m_frame_lst[m_curIndex];
     }
 
-    // m_hanlde_frame = true;
-
     auto data = cropVideoFrame(snapshot);
 
     if (!data.empty()) {
+
+        cv::imwrite("./data.jpg", data);
 
         if (isStudied.loadRelaxed()) {
             isStudied.storeRelaxed(0);
@@ -391,11 +394,11 @@ void WorkThread::handleFrame()
             else if (data.channels() == 1)
                 cv::cvtColor(data, frame, cv::COLOR_GRAY2BGR);
 
-            std::vector<Object> objects;
+            // std::vector<Object> objects;
 
             // m_yoloDetector->detect(frame, objects, 0.5f, 0.45f);
 
-            // std::vector<Detection> objects = m_yoloDetectorHand->detect(frame);
+            std::vector<Detection> objects = m_yoloDetectorHand->detect(frame);
 
             for (const auto& det : objects) {
                 if (det.label == 0 && det.prob > 0.01) {

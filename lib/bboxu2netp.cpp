@@ -159,15 +159,15 @@ bool BboxU2netp::load_model(const std::string& paramPath,
     setupNet(net_, cfg_);
 
     if (net_.load_param(paramPath.c_str()) != 0) {
-        LOGE("BboxU2netp load_param failed: %s", paramPath.c_str());
+        LOGE("BboxU2netp load_param failed: %s\n", paramPath.c_str());
         return false;
     }
     if (net_.load_model(binPath.c_str()) != 0) {
-        LOGE("BboxU2netp load_model failed: %s", binPath.c_str());
+        LOGE("BboxU2netp load_model failed: %s\n", binPath.c_str());
         return false;
     }
     loaded_ = true;
-    LOGI("BboxU2netp model loaded from file");
+    LOGI("BboxU2netp model loaded from file\n");
     return true;
 }
 

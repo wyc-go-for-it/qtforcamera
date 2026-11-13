@@ -28,6 +28,29 @@ FaceDialog::~FaceDialog()
     delete ui;
 }
 
+bool FaceDialog::eventFilter(QObject* obj, QEvent* e)
+{
+    if (obj->objectName() != "m_glContainer")
+        return QWidget::eventFilter(obj, e);
+
+    switch (e->type()) {
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseMove:
+    case QEvent::MouseButtonRelease: {
+        auto* me = static_cast<QMouseEvent*>(e);
+        QMouseEvent fwd(me->type(),
+            m_glWindow->mapFromGlobal(me->globalPos()),
+            me->globalPos(),
+            me->button(), me->buttons(), me->modifiers());
+        QCoreApplication::sendEvent(m_glWindow, &fwd);
+        return true;
+    }
+    default:
+        break;
+    }
+    return QWidget::eventFilter(obj, e);
+}
+
 void FaceDialog::updateGLSurface(QCamera* camera, const QCameraInfo& cameraInfo)
 {
     this->m_camera = camera;
@@ -83,9 +106,9 @@ void FaceDialog::updateGLSurface(QCamera* camera, const QCameraInfo& cameraInfo)
                 isFirstFrame = true;
                 m_glWindow->updateImageSize(frame.size());
             }
-            m_glWindow->updateFrame(frame);
-
             mWorkThread->onVideoFrameChanged(frame);
+
+            m_glWindow->updateFrame(frame);
         });
     }
 

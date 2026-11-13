@@ -88,6 +88,7 @@ public:
         update();
     }
 
+    void updateFrameOpt(const FrameData &d);
 public slots:
     void updateFrame(const QVideoFrame& frame);
     void updateImageSize(const QSize& size);

@@ -76,7 +76,7 @@ bool Yolo11Ncnn::load_model(const std::string& param_path,
 
     is_loaded = true;
 
-    LOGI("Yolo11Ncnn model loaded from file");
+    LOGI("Yolo11Ncnn model loaded from file\n");
 
     return true;
 }

@@ -1,6 +1,7 @@
 #ifndef WORKTHREAD_H
 #define WORKTHREAD_H
 
+#include "frameconverter.h"
 #include "productdatabase.h"
 #include "productfeatureengine.h"
 #include "producttextcleaner.h"
@@ -52,7 +53,7 @@ public:
 
     static void splitData();
 public slots:
-    void onVideoFrameChanged(const QVideoFrame& frame);
+    void onVideoFrameChanged(const FrameData& frame);
     void onRecognition(bool recog);
     void onUpdateVertex(QVector<QPointF> points, QCamera::Position pos, qint32 rotationAngle);
 
@@ -72,7 +73,7 @@ private:
     void recognition(const cv::Mat& cur_fg);
 
     void initDir();
-    cv::Mat cropVideoFrame(QVideoFrame& frame);
+    cv::Mat cropVideoFrame(const QImage& frame);
     void loadBG();
     void initOcrModel();
 
@@ -101,7 +102,7 @@ private:
     uint m_curIndex = 0;
     static_assert(std::is_unsigned_v<decltype(m_curIndex)>);
 
-    std::array<QVideoFrame, FRAME_LST_SIZE> m_frame_lst;
+    std::array<QImage, FRAME_LST_SIZE> m_frame_lst;
 
     QMutex m_lock;
     std::atomic_bool m_hanlde_frame { false };

@@ -1,4 +1,5 @@
 #include "glrendererwidget.h"
+#include "qguiapplication.h"
 
 #include <QScroller>
 #include <QThread>
@@ -130,10 +131,29 @@ void GLRendererWidget::updateFrame(const QVideoFrame& frame)
                 this->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
             }
 
-            // 【修改点】：将 GL_RGBA8 替换为 GL_RGBA，解决 GLES 下的 invalid format 报错
-            this->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_videoWidth, m_videoHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, bits);
+            const uchar* bits = cloneFrame.bits(0);
+            const int size = cloneFrame.mappedBytes(); // JPEG 码流字节数
+            if (!bits || size <= 0) {
+                cloneFrame.unmap();
+                return;
+            }
 
-            this->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+            QImage img = QImage::fromData(bits, size, "JPG");
+
+            if (img.isNull()) {
+                return;
+            }
+            img = img.convertToFormat(QImage::Format_RGBA8888);
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, m_textures[0]);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, img.bytesPerLine() / 4);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                img.width(), img.height(), 0,
+                GL_RGBA, GL_UNSIGNED_BYTE, img.constBits());
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
         } else {
             // 备用兜底逻辑：若 bits(0) 为空才尝试转换
             QImage img = cloneFrame.image().convertToFormat(QImage::Format_RGBA8888);
@@ -149,6 +169,94 @@ void GLRendererWidget::updateFrame(const QVideoFrame& frame)
     }
 
     cloneFrame.unmap();
+
+    update();
+}
+
+void GLRendererWidget::updateFrameOpt(const FrameData& d)
+{
+
+    if (!is_init || !d.isValid())
+        return;
+
+    bool sizeChanged = (m_videoWidth != d.width || m_videoHeight != d.height);
+    m_videoWidth = d.width;
+    m_videoHeight = d.height;
+    if (sizeChanged)
+        updateVertexPos();
+
+    const QVideoFrame::PixelFormat format = d.format;
+
+    // 懒加载创建纹理
+    if (!m_textures[0]) {
+        glGenTextures(2, m_textures);
+        for (int i = 0; i < 2; ++i) {
+            glBindTexture(GL_TEXTURE_2D, m_textures[i]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+    }
+
+    if (format == QVideoFrame::Format_YUYV) {
+        m_currentShaderType = ShaderType::YUYV;
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_textures[0]);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        // 每个 texel = 4 字节 = 一个 YUYV 宏像素，ROW_LENGTH 单位是 texel
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, d.strides[0] / 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
+            m_videoWidth / 2, m_videoHeight, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE,
+            d.planes[0].constData());
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    } else if (format == QVideoFrame::Format_NV21) {
+        m_currentShaderType = ShaderType::NV21;
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+        // Y 平面：1 字节/texel
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_textures[0]);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, d.strides[0]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8,
+            m_videoWidth, m_videoHeight, 0,
+            GL_RED, GL_UNSIGNED_BYTE,
+            d.planes[0].constData());
+
+        // VU 平面：2 字节/texel（R=V, G=U）
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_textures[1]);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, d.strides[1] / 2);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8,
+            m_videoWidth / 2, m_videoHeight / 2, 0,
+            GL_RG, GL_UNSIGNED_BYTE,
+            d.planes[1].constData());
+
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    } else {
+        // RGB32 / ARGB32 / 其他 4 字节/像素的格式
+        m_currentShaderType = ShaderType::RGB;
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_textures[0]);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+        int strideInPixels = d.strides[0] / 4;
+        if (strideInPixels != m_videoWidth)
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, strideInPixels);
+        else
+            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+            m_videoWidth, m_videoHeight, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE,
+            d.planes[0].constData());
+
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    }
 
     update();
 }
@@ -176,6 +284,7 @@ void GLRendererWidget::updateCurrentObjects(const QVector<DetectObject>& objects
 
 void GLRendererWidget::initializeGL()
 {
+
     initializeOpenGLFunctions();
     this->glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
 
@@ -397,23 +506,23 @@ void GLRendererWidget::paintGL()
             break;
         case 270:
             tex[0] = 1;
-            tex[1] = 0;
+            tex[1] = 1; // v0
             tex[2] = 1;
-            tex[3] = 1;
+            tex[3] = 0; // v1
             tex[4] = 0;
-            tex[5] = 0;
+            tex[5] = 1; // v2
             tex[6] = 0;
-            tex[7] = 1;
+            tex[7] = 0; // v3
             break;
         }
 
         if (m_mirrored == QCamera::FrontFace) {
             // 前置：做一次 180° 交换（等价于同时翻 X 和翻 Y），
             // 用来抵消 Android HAL 对前置的镜像
-            std::swap(tex[4], tex[2]);
-            std::swap(tex[5], tex[3]);
-            std::swap(tex[6], tex[0]);
-            std::swap(tex[7], tex[1]);
+            // std::swap(tex[4], tex[2]);
+            // std::swap(tex[5], tex[3]);
+            // std::swap(tex[6], tex[0]);
+            // std::swap(tex[7], tex[1]);
         }
 
         this->glEnableVertexAttribArray(0);

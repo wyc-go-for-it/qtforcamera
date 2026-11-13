@@ -21,6 +21,9 @@ public:
 
     void updateGLSurface(QCamera* camera, const QCameraInfo& cameraInfo);
 
+protected:
+    bool eventFilter(QObject* obj, QEvent* e) override;
+
 private slots:
     void on_register_face_clicked();
 

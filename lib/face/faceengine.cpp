@@ -226,8 +226,8 @@ std::vector<FaceInfo> FaceEngine::detectFace(const cv::Mat& frame)
 
         auto t2 = std::chrono::high_resolution_clock::now();
 
-        // LOGI("【detectFace分析】detect_face=%.2fdms ,check106=%.2fms,score:%.2f\n", std::chrono::duration<double, std::milli>(t1 - t0).count(),
-        //     std::chrono::duration<double, std::milli>(t2 - t1).count(), f.score);
+        LOGI("【detectFace分析】detect_face=%.2fdms ,check106=%.2fms,score:%.2f\n", std::chrono::duration<double, std::milli>(t1 - t0).count(),
+            std::chrono::duration<double, std::milli>(t2 - t1).count(), f.score);
     }
     return final_faces;
 }

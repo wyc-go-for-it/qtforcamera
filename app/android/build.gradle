@@ -61,7 +61,7 @@ android {
             resources.srcDirs = ['resources']
             renderscript.srcDirs = ['src']
             assets.srcDirs = ['assets']
-            jniLibs.srcDirs = ['libs','../../../../commonAndroidLibs']
+            jniLibs.srcDirs = ['libs']
        }
     }
 
@@ -125,7 +125,7 @@ android {
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
            if (variant.buildType.name == 'release') {
-                outputFileName = "qtforcamera_v${myVersionName}.apk"
+                outputFileName = "android-build-release-unsigned.apk"
 
                 variant.assembleProvider.get().doLast {
                     copy {

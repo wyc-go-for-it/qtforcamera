@@ -102,7 +102,7 @@ cv::Mat letterbox(const cv::Mat& src, int target_size, ScaleParameter& parameter
         pad_w, target_size - new_w - pad_w,
         cv::BORDER_CONSTANT, color);
 
-    LOGI("letterbox: scale=%.3f pad_w=%d pad_h=%d\n", scale, pad_w, pad_h);
+    // LOGI("letterbox: scale=%.3f pad_w=%d pad_h=%d\n", scale, pad_w, pad_h);
 
     parameter.scale = scale;
     parameter.pad_x = pad_w;
@@ -156,7 +156,7 @@ std::vector<Detection> HandDetector::detect(const cv::Mat& bgr, float conf_thres
 
     std::vector<std::pair<float, int>> confs;
 
-    for (int i = 0; i < 2100; ++i) {
+    for (int i = 0; i < out.w; ++i) {
         float conf = conf_ptr[i];
 
         confs.push_back({ conf, i });
